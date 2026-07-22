@@ -1,0 +1,31 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --all-features
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - run: ./scripts/build-xcframework.sh
+      - run: cd macos && xcodegen generate
+      - name: Test native app
+        run: xcodebuild -project macos/PNGSmith.xcodeproj -scheme PNGSmith -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test

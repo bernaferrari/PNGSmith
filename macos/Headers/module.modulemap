@@ -1,0 +1,5 @@
+module PNGSmithCoreFFI {
+    header "pngsmith_core.h"
+    export *
+}
+

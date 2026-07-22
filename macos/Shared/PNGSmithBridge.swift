@@ -1,0 +1,40 @@
+import Foundation
+import PNGSmithCoreFFI
+
+enum PNGSmithBridgeError: LocalizedError {
+    case encodingFailed
+    case emptyResponse
+    case invalidUTF8
+    case coreError(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .encodingFailed: "Could not encode the PNGSmith request."
+        case .emptyResponse: "PNGSmith returned no response."
+        case .invalidUTF8: "PNGSmith returned an invalid response."
+        case .coreError(let message): message
+        }
+    }
+}
+
+enum PNGSmithCore {
+    static func execute(_ request: PNGSmithRequest) throws -> PNGSmithResponse {
+        let requestData = try JSONEncoder().encode(request)
+        guard let requestJSON = String(data: requestData, encoding: .utf8) else {
+            throw PNGSmithBridgeError.encodingFailed
+        }
+        let responsePointer = requestJSON.withCString { pngsmith_execute_json($0) }
+        guard let responsePointer else { throw PNGSmithBridgeError.emptyResponse }
+        defer { pngsmith_string_free(responsePointer) }
+        guard let responseJSON = String(validatingCString: responsePointer) else {
+            throw PNGSmithBridgeError.invalidUTF8
+        }
+        let response = try JSONDecoder().decode(PNGSmithResponse.self, from: Data(responseJSON.utf8))
+        guard response.ok else {
+            let details = response.results.compactMap(\.error).joined(separator: "\n")
+            throw PNGSmithBridgeError.coreError(details.isEmpty ? (response.error ?? "Compression failed.") : details)
+        }
+        return response
+    }
+}
+

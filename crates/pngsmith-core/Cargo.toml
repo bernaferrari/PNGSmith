@@ -1,0 +1,25 @@
+[package]
+name = "pngsmith-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = ["parallel"]
+parallel = ["oxipng/parallel"]
+zopfli = ["oxipng/zopfli"]
+perceptual = ["dep:imagequant"]
+
+[dependencies]
+imagequant = { workspace = true, optional = true }
+oxipng.workspace = true
+png.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+

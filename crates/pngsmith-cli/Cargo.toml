@@ -1,0 +1,17 @@
+[package]
+name = "pngsmith-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "pngsmith"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+pngsmith-core = { path = "../pngsmith-core", features = ["perceptual", "zopfli"] }
+serde_json.workspace = true
+

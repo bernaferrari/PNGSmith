@@ -1,0 +1,8 @@
+/target/
+/dist/
+/macos/build/
+/macos/Frameworks/*.xcframework/
+/macos/PNGSmith.xcodeproj/
+*.xcarchive
+*.dSYM
+.DS_Store

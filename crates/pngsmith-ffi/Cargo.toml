@@ -1,0 +1,15 @@
+[package]
+name = "pngsmith-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "pngsmith_core"
+crate-type = ["staticlib"]
+
+[dependencies]
+pngsmith-core = { path = "../pngsmith-core", features = ["perceptual", "zopfli"] }
+serde_json.workspace = true
+

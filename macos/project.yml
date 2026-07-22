@@ -1,0 +1,112 @@
+name: PNGSmith
+options:
+  bundleIdPrefix: com.bernardoferrari
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+    CODE_SIGN_STYLE: Automatic
+    PNGSMITH_UPDATE_FEED_URL: ""
+    PNGSMITH_SPARKLE_PUBLIC_KEY: ""
+    # Set by scripts/development-install.sh or as an Xcode build setting.
+    DEVELOPMENT_TEAM: $(PNGSMITH_DEVELOPMENT_TEAM)
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.4
+targets:
+  PNGSmith:
+    type: application
+    platform: macOS
+    sources:
+      - path: PNGSmithApp/AppIcon.icon
+        buildPhase: resources
+      - path: PNGSmithApp
+        excludes:
+          - IconAssets
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bernardoferrari.pngsmith
+        PRODUCT_NAME: PNGSmith
+        INFOPLIST_FILE: PNGSmithApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PNGSmithApp/PNGSmith.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: PNGSmithCompressQuickAction
+        embed: true
+      - target: PNGSmithReduceQuickAction
+        embed: true
+      - framework: Frameworks/PNGSmithCore.xcframework
+        embed: false
+      - package: Sparkle
+      - sdk: AppIntents.framework
+  PNGSmithCompressQuickAction:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: PNGSmithQuickAction
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bernardoferrari.pngsmith.compress-quick-action
+        PRODUCT_NAME: PNGSmithCompressQuickAction
+        INFOPLIST_FILE: PNGSmithQuickAction/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PNGSmithQuickAction/PNGSmithQuickAction.entitlements
+        PNGSMITH_ACTION_NAME: Compress
+        PNGSMITH_ACTION_PROFILE: compress
+        SKIP_INSTALL: YES
+    dependencies:
+      - framework: Frameworks/PNGSmithCore.xcframework
+        embed: false
+  PNGSmithReduceQuickAction:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: PNGSmithQuickAction
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bernardoferrari.pngsmith.reduce-quick-action
+        PRODUCT_NAME: PNGSmithReduceQuickAction
+        INFOPLIST_FILE: PNGSmithQuickAction/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PNGSmithQuickAction/PNGSmithQuickAction.entitlements
+        PNGSMITH_ACTION_NAME: Reduce to 256 Colors
+        PNGSMITH_ACTION_PROFILE: reduce-256
+        SKIP_INSTALL: YES
+    dependencies:
+      - framework: Frameworks/PNGSmithCore.xcframework
+        embed: false
+  PNGSmithTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: PNGSmithTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.bernardoferrari.pngsmith.tests
+    dependencies:
+      - target: PNGSmith
+schemes:
+  PNGSmith:
+    build:
+      targets:
+        PNGSmith: all
+        PNGSmithCompressQuickAction: all
+        PNGSmithReduceQuickAction: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+    test:
+      config: Debug
+      targets:
+        - PNGSmithTests
