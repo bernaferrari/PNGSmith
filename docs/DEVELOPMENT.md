@@ -4,8 +4,8 @@ This guide covers local builds, the command-line and JSON interfaces, tests, arc
 
 ## Requirements
 
-- macOS 14 or newer
-- Xcode 16 or newer
+- macOS 26 or newer
+- Xcode 26 or newer
 - Rust 1.85.1 or newer
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 

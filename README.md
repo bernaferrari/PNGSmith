@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img alt="macOS 14 or newer" src="https://img.shields.io/badge/macOS-14%2B-111316?style=flat-square&logo=apple&logoColor=white">
+  <img alt="macOS 26 or newer" src="https://img.shields.io/badge/macOS-26%2B-111316?style=flat-square&logo=apple&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-111316?style=flat-square"></a>
 </p>
 
@@ -47,7 +47,7 @@ brew install xcodegen
 ./scripts/development-install.sh YOUR_APPLE_TEAM_ID
 ```
 
-Requirements: macOS 14+, Xcode 16+, Rust 1.85.1+, and [XcodeGen](https://github.com/yonaskolb/XcodeGen). The script installs a signed build in `~/Applications` with its Finder actions.
+Requirements: macOS 26+, Xcode 26+, Rust 1.85.1+, and [XcodeGen](https://github.com/yonaskolb/XcodeGen). The script installs a signed build in `~/Applications` with its Finder actions.
 
 ## CLI
 
