@@ -46,12 +46,6 @@ struct SettingsView: View {
                                 isOn: $store.settings.verifyPixels
                             )
                             Divider().padding(.vertical, 10)
-                            settingToggle(
-                                "Preserve transparent RGB",
-                                detail: "Keep RGB values beneath fully transparent pixels for editing workflows.",
-                                isOn: $store.settings.preserveTransparentRGB
-                            )
-                            Divider().padding(.vertical, 10)
                             HStack(spacing: 14) {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text("Copy filename suffix")
@@ -75,8 +69,10 @@ struct SettingsView: View {
                             integrationRow("Reduce to 256 Colors", detail: "Smaller, visually optimized output")
                             Divider()
                             HStack {
-                                Button("Manage Services") { openSystemSettings(servicesURL) }
-                                Button("Manage Quick Actions") { openSystemSettings(extensionsURL) }
+                                Button("Keyboard Shortcuts…") { openSystemSettings(keyboardSettingsURL) }
+                                    .help("Open Keyboard Shortcuts, then choose Services")
+                                Button("Login Items & Extensions…") { openSystemSettings(extensionsSettingsURL) }
+                                    .help("Open Extensions, then expand Finder")
                                 Spacer()
                             }
                         }
@@ -156,8 +152,12 @@ struct SettingsView: View {
         }
     }
 
-    private let servicesURL = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts")
-    private let extensionsURL = URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences")
+    private let keyboardSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts"
+    )
+    private let extensionsSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension"
+    )
 
     private func openSystemSettings(_ url: URL?) {
         guard let url else { return }

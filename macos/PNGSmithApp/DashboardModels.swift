@@ -55,6 +55,8 @@ struct SaveSummary: Equatable, Sendable {
     let savedBytes: Int64
     let firstOutput: String?
 
+    var totalCount: Int { writtenCount + skippedCount + failedCount }
+
     init(results: [PNGSmithResult]) {
         writtenCount = results.filter(\.written).count
         failedCount = results.filter { $0.error != nil }.count
@@ -71,13 +73,132 @@ struct SaveSummary: Equatable, Sendable {
     }
 }
 
+struct PreviewBatchStatus: Equatable {
+    enum ItemState: Equatable {
+        case pending
+        case ready
+        case failed
+    }
+
+    let totalCount: Int
+    let readyCount: Int
+    let pendingCount: Int
+    let failedCount: Int
+
+    init(states: [ItemState]) {
+        totalCount = states.count
+        readyCount = states.count { $0 == .ready }
+        pendingCount = states.count { $0 == .pending }
+        failedCount = states.count { $0 == .failed }
+    }
+
+    var canSave: Bool { totalCount > 0 && readyCount == totalCount }
+    var isPending: Bool { pendingCount > 0 }
+}
+
+enum ReplacementRisk: Equatable {
+    case none
+    case crop
+    case colorReduction
+    case cropAndColorReduction
+
+    init(hasCropEdits: Bool, hasLossyPreviews: Bool) {
+        switch (hasCropEdits, hasLossyPreviews) {
+        case (false, false): self = .none
+        case (true, false): self = .crop
+        case (false, true): self = .colorReduction
+        case (true, true): self = .cropAndColorReduction
+        }
+    }
+}
+
 enum SaveDestination: Equatable {
     case copies
     case replace
     case saveAs
 }
 
-enum AutoColorStrategy: String, CaseIterable, Identifiable {
+enum ComparisonLayout: String, CaseIterable, Identifiable, Sendable {
+    case hold
+    case divider
+    case sideBySide
+    case stacked
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .hold: "Hold"
+        case .divider: "Divider"
+        case .sideBySide: "Left and Right"
+        case .stacked: "Top and Bottom"
+        }
+    }
+}
+
+enum DashboardWorkspaceMode: Equatable, Sendable {
+    case image
+    case batch
+}
+
+enum CropToolState: Equatable, Sendable {
+    case inactive
+    case presented(URL)
+    case dismissing(URL)
+
+    var itemURL: URL? {
+        switch self {
+        case .inactive: nil
+        case .presented(let url), .dismissing(let url): url
+        }
+    }
+
+    var showsChrome: Bool {
+        if case .presented = self { return true }
+        return false
+    }
+
+    var isActive: Bool { itemURL != nil }
+
+    mutating func present(_ url: URL) {
+        self = .presented(url)
+    }
+
+    mutating func beginDismissal() {
+        guard case .presented(let url) = self else { return }
+        self = .dismissing(url)
+    }
+
+    mutating func close() {
+        self = .inactive
+    }
+}
+
+enum ColorReductionPreset: String, CaseIterable, Identifiable, Sendable {
+    case balanced
+    case smaller
+    case manual
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .balanced: "Balanced"
+        case .smaller: "Smaller"
+        case .manual: "Manual"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .balanced: "Reduce colors while protecting fine detail"
+        case .smaller: "Push further for a smaller result"
+        case .manual: "Choose an exact maximum color count"
+        }
+    }
+}
+
+enum AutoColorStrategy: String, CaseIterable, Identifiable, Codable, Sendable {
     case balanced
     case smaller
 
@@ -94,6 +215,93 @@ enum AutoColorStrategy: String, CaseIterable, Identifiable {
         switch self {
         case .balanced: "Reduces size while protecting fine detail."
         case .smaller: "Pushes further and may soften subtle detail."
+        }
+    }
+}
+
+struct ImageOptimizationSettings: Equatable, Codable, Sendable {
+    static let supportedColorRange = 2...256
+
+    var reduceColors: Bool
+    var maxColors: Int
+    var autoColors: Bool
+    var autoStrategy: AutoColorStrategy
+
+    var mode: DashboardMode { reduceColors ? .shrink : .auto }
+
+    var colorReductionPreset: ColorReductionPreset? {
+        guard reduceColors else { return nil }
+        guard autoColors else { return .manual }
+        return autoStrategy == .balanced ? .balanced : .smaller
+    }
+
+    mutating func apply(_ preset: ColorReductionPreset) {
+        reduceColors = true
+        switch preset {
+        case .balanced:
+            autoColors = true
+            autoStrategy = .balanced
+        case .smaller:
+            autoColors = true
+            autoStrategy = .smaller
+        case .manual:
+            autoColors = false
+        }
+    }
+
+    mutating func applyManualColorCount(_ count: Int) {
+        reduceColors = true
+        autoColors = false
+        maxColors = Self.clampedColorCount(count)
+    }
+
+    static func clampedColorCount(_ count: Int) -> Int {
+        min(max(count, supportedColorRange.lowerBound), supportedColorRange.upperBound)
+    }
+}
+
+struct OptimizationGroupSummary: Equatable, Sendable {
+    let colorReductionEnabled: Bool
+    let preset: ColorReductionPreset?
+    let manualColorCount: Int?
+    let status: String?
+
+    init(_ settings: [ImageOptimizationSettings]) {
+        guard let first = settings.first else {
+            colorReductionEnabled = false
+            preset = nil
+            manualColorCount = nil
+            status = nil
+            return
+        }
+
+        let allEnabled = settings.allSatisfy(\.reduceColors)
+        colorReductionEnabled = allEnabled
+        guard allEnabled else {
+            preset = nil
+            manualColorCount = nil
+            status = settings.allSatisfy({ !$0.reduceColors }) ? nil : "Mixed"
+            return
+        }
+
+        let candidatePreset = first.colorReductionPreset
+        guard settings.allSatisfy({ $0.colorReductionPreset == candidatePreset }) else {
+            preset = nil
+            manualColorCount = nil
+            status = "Mixed"
+            return
+        }
+
+        preset = candidatePreset
+        if candidatePreset == .manual {
+            let commonCount = settings.allSatisfy({ $0.maxColors == first.maxColors })
+                ? first.maxColors
+                : nil
+            manualColorCount = commonCount
+            status = commonCount == nil ? "Mixed" : nil
+        } else {
+            manualColorCount = nil
+            status = nil
         }
     }
 }

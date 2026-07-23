@@ -135,7 +135,6 @@ struct PNGSmithSettings: Codable, Sendable, Equatable {
     var oxipngLevel = 4
     var zopfli = false
     var metadata = "preserve"
-    var preserveTransparentRGB = true
     var qualityMin = 90
     var qualityMax = 100
     var verifyPixels = true
@@ -169,7 +168,7 @@ struct PNGSmithSettings: Codable, Sendable, Equatable {
                 zopfli: zopfli,
                 preserveMetadata: metadata == "preserve",
                 metadata: metadata,
-                preserveTransparentRGB: preserveTransparentRGB,
+                preserveTransparentRGB: true,
                 allowLosslessPalette: true,
                 scale16Bit: false,
                 maxDecompressedBytes: 512 * 1024 * 1024

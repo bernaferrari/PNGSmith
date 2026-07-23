@@ -594,7 +594,10 @@ mod tests {
 
         assert!((2..=256).contains(&balanced.color_budget));
         assert!(balanced.palette_entries <= usize::from(balanced.color_budget));
-        assert!(smaller.color_budget <= balanced.color_budget);
+        assert!(
+            smaller.color_budget < balanced.color_budget,
+            "Smaller should choose a stricter budget than Balanced: {smaller:?} vs {balanced:?}"
+        );
     }
 
     #[cfg(feature = "perceptual")]

@@ -53,3 +53,124 @@ enum CropAspect: String, CaseIterable, Identifiable, Sendable {
         }
     }
 }
+
+/// Evaluates the small arithmetic expressions accepted by crop dimension fields.
+/// Deliberately supports only numbers, parentheses, and the four basic operators.
+enum CropDimensionExpression {
+    static func pixels(from expression: String) -> Int? {
+        var parser = Parser(expression)
+        guard let value = parser.parse(), value.isFinite, value > 0,
+              value <= Double(Int.max) else {
+            return nil
+        }
+        let pixels = Int(value.rounded())
+        return pixels > 0 ? pixels : nil
+    }
+
+    private struct Parser {
+        private let characters: [Character]
+        private var index = 0
+
+        init(_ source: String) {
+            characters = Array(
+                source
+                    .replacingOccurrences(of: ",", with: ".")
+                    .replacingOccurrences(of: "×", with: "*")
+                    .replacingOccurrences(of: "÷", with: "/")
+            )
+        }
+
+        mutating func parse() -> Double? {
+            guard let value = parseExpression() else { return nil }
+            skipWhitespace()
+            return index == characters.count ? value : nil
+        }
+
+        private mutating func parseExpression() -> Double? {
+            guard var value = parseTerm() else { return nil }
+            while true {
+                skipWhitespace()
+                if consume("+") {
+                    guard let rhs = parseTerm() else { return nil }
+                    value += rhs
+                } else if consume("-") {
+                    guard let rhs = parseTerm() else { return nil }
+                    value -= rhs
+                } else {
+                    return value
+                }
+            }
+        }
+
+        private mutating func parseTerm() -> Double? {
+            guard var value = parseUnary() else { return nil }
+            while true {
+                skipWhitespace()
+                if consume("*") {
+                    guard let rhs = parseUnary() else { return nil }
+                    value *= rhs
+                } else if consume("/") {
+                    guard let rhs = parseUnary(), rhs != 0 else { return nil }
+                    value /= rhs
+                } else {
+                    return value
+                }
+            }
+        }
+
+        private mutating func parseUnary() -> Double? {
+            skipWhitespace()
+            if consume("+") { return parseUnary() }
+            if consume("-") { return parseUnary().map { -$0 } }
+            return parsePrimary()
+        }
+
+        private mutating func parsePrimary() -> Double? {
+            skipWhitespace()
+            if consume("(") {
+                guard let value = parseExpression() else { return nil }
+                skipWhitespace()
+                guard consume(")") else { return nil }
+                return value
+            }
+            return parseNumber()
+        }
+
+        private mutating func parseNumber() -> Double? {
+            skipWhitespace()
+            let start = index
+            var hasDigit = false
+            var hasDecimalPoint = false
+
+            while index < characters.count {
+                let character = characters[index]
+                if character.isNumber {
+                    hasDigit = true
+                    index += 1
+                } else if character == ".", !hasDecimalPoint {
+                    hasDecimalPoint = true
+                    index += 1
+                } else {
+                    break
+                }
+            }
+
+            guard hasDigit else { return nil }
+            return Double(String(characters[start..<index]))
+        }
+
+        private mutating func skipWhitespace() {
+            while index < characters.count, characters[index].isWhitespace {
+                index += 1
+            }
+        }
+
+        private mutating func consume(_ character: Character) -> Bool {
+            guard index < characters.count, characters[index] == character else {
+                return false
+            }
+            index += 1
+            return true
+        }
+    }
+}

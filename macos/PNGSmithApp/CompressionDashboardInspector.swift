@@ -4,7 +4,8 @@ extension CompressionDashboard {
     // MARK: - Mode controls
 
     var modeSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let optimization = selectedOptimization
+        return VStack(alignment: .leading, spacing: 16) {
             if selectedItem?.isAnimated == true {
                 HStack(alignment: .center, spacing: 10) {
                     Image(systemName: "play.rectangle.on.rectangle.fill")
@@ -21,61 +22,60 @@ extension CompressionDashboard {
                     Spacer()
                 }
             } else {
-                Button {
-                    reduceColorsEnabled.toggle()
-                } label: {
-                    HStack(alignment: .center, spacing: 10) {
-                        Image(systemName: "paintpalette.fill")
-                            .foregroundStyle(reduceColorsEnabled ? Color.orange : Color.secondary)
-                            .frame(width: 22)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Reduce colors")
-                                .font(.subheadline.weight(.medium))
-                            Text("Smaller files, with possible visual changes.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 12)
-                        Toggle("", isOn: reduceColorsBinding)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .allowsHitTesting(false)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Reduce colors")
-                .accessibilityValue(reduceColorsEnabled ? "On" : "Off")
+                ColorReductionSelector(
+                    isEnabled: optimization.reduceColors,
+                    selectedPreset: selectedColorReductionPreset,
+                    status: nil,
+                    setEnabled: setSelectedColorReductionEnabled,
+                    select: applySelectedColorReductionPreset
+                )
 
-                if reduceColorsEnabled {
+                if optimization.reduceColors {
                     shrinkControls
-                        .transition(.opacity)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: reduceColorsEnabled)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: optimization.reduceColors)
     }
 
-    var reduceColorsBinding: Binding<Bool> {
-        Binding(
-            get: { reduceColorsEnabled },
-            set: { newValue in reduceColorsEnabled = newValue }
-        )
+    var selectedColorReductionPreset: ColorReductionPreset? {
+        selectedOptimization.colorReductionPreset
+    }
+
+    func setSelectedColorReductionEnabled(_ isEnabled: Bool) {
+        guard let item = selectedItem else { return }
+        updateOptimizations(for: [item]) { $0.reduceColors = isEnabled }
+    }
+
+    func applySelectedColorReductionPreset(_ preset: ColorReductionPreset) {
+        guard let item = selectedItem else { return }
+        updateOptimizations(for: [item]) { $0.apply(preset) }
     }
 
     var shrinkControls: some View {
-        let outcome = selectedItem.flatMap { previews[$0.url]?.readyOutcome }
+        let optimization = selectedOptimization
+        // Preserve the last computed count while a new automatic preset runs;
+        // replacing it with a dash makes the control appear to reset.
+        let outcome = selectedItem.flatMap { previews[$0.url]?.lastKnownOutcome }
         let automaticCount = selectedItem.flatMap { item in
             automaticColorBudgets[item.url] ?? outcome?.paletteEntries
         }
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Button {
-                    colorInput = String(autoColorsEnabled ? automaticCount ?? maxColorCount : maxColorCount)
+                    colorInput = String(
+                        optimization.autoColors
+                            ? automaticCount ?? optimization.maxColors
+                            : optimization.maxColors
+                    )
                     showColorEditor = true
                 } label: {
-                    Text(autoColorsEnabled ? automaticCount.map(String.init) ?? "—" : String(maxColorCount))
+                    Text(
+                        optimization.autoColors
+                            ? automaticCount.map(String.init) ?? "—"
+                            : String(optimization.maxColors)
+                    )
                         .font(.system(size: 28, weight: .semibold))
                         .monospacedDigit()
                         .contentTransition(.numericText())
@@ -110,76 +110,43 @@ extension CompressionDashboard {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Toggle("Auto", isOn: $autoColorsEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .help("Find the smallest palette that meets a high visual-quality target")
             }
 
-            if autoColorsEnabled {
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 2) {
-                        ForEach(AutoColorStrategy.allCases) { strategy in
-                            Button {
-                                autoColorStrategyBinding.wrappedValue = strategy
-                            } label: {
-                                Text(strategy.title)
-                                    .font(.subheadline.weight(.medium))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 6)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(autoColorStrategy == strategy ? Color.primary : Color.secondary)
-                            .background {
-                                if autoColorStrategy == strategy {
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(Color.primary.opacity(0.1))
-                                }
-                            }
-                            .help(strategy.help)
-                            .accessibilityAddTraits(autoColorStrategy == strategy ? .isSelected : [])
-                        }
-                    }
-                    .padding(3)
-                    .background(
-                        Color.primary.opacity(0.045),
-                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    )
-
-                    Text(autoColorStrategy.help)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .transition(.opacity)
-            } else {
+            if !optimization.autoColors {
                 Slider(
                     value: Binding(
-                        get: { Double(maxColorCount) },
+                        get: { Double(selectedOptimization.maxColors) },
                         set: { setMaxColors(Int($0.rounded())) }
                     ),
-                    in: 2...256
+                    in: Double(ImageOptimizationSettings.supportedColorRange.lowerBound)...Double(ImageOptimizationSettings.supportedColorRange.upperBound)
                 )
                 .accessibilityLabel("Maximum colors")
-                .accessibilityValue("\(maxColorCount)")
+                .accessibilityValue("\(optimization.maxColors)")
             }
 
         }
     }
 
-    func setMaxColors(_ count: Int) {
-        let clamped = min(max(count, 2), 256)
-        maxColorCount = clamped
+    func setMaxColors(_ count: Int, debounced: Bool = true) {
+        guard let item = selectedItem else { return }
+        let clamped = ImageOptimizationSettings.clampedColorCount(count)
         colorInput = String(clamped)
+        updateOptimizations(for: [item], debounced: debounced) {
+            $0.applyManualColorCount(clamped)
+        }
     }
 
     func commitColorInput() {
         guard let value = Int(colorInput.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            colorInput = String(maxColorCount)
+            colorInput = String(selectedOptimization.maxColors)
             return
         }
-        autoColorsEnabled = false
-        setMaxColors(value)
+        guard let item = selectedItem else { return }
+        let clamped = ImageOptimizationSettings.clampedColorCount(value)
+        colorInput = String(clamped)
+        updateOptimizations(for: [item]) {
+            $0.applyManualColorCount(clamped)
+        }
         showColorEditor = false
     }
 
@@ -223,49 +190,34 @@ extension CompressionDashboard {
             Divider()
 
             Menu {
-                Button {
-                    selectDestination(.copies)
-                } label: {
-                    Label("Save copies", systemImage: saveDestination == .copies ? "checkmark" : "doc.on.doc")
-                }
-                Button {
-                    selectDestination(.replace)
-                } label: {
-                    Label("Replace originals", systemImage: saveDestination == .replace ? "checkmark" : "arrow.triangle.2.circlepath")
-                }
-                if items.count == 1 {
-                    Divider()
-                    Button {
-                        selectDestination(.saveAs)
-                    } label: {
-                        Label("Save As…", systemImage: saveDestination == .saveAs ? "checkmark" : "square.and.arrow.down")
+                Picker(
+                    "Save destination",
+                    selection: Binding(
+                        get: { saveDestination },
+                        set: { selectDestination($0) }
+                    )
+                ) {
+                    Text("Save copies").tag(SaveDestination.copies)
+                    Text("Replace originals").tag(SaveDestination.replace)
+                    if activeSaveItems.count == 1 {
+                        Divider()
+                        Label("Save As…", systemImage: "square.and.arrow.down")
+                            .tag(SaveDestination.saveAs)
                     }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: destinationIcon)
-                        .foregroundStyle(saveDestination == .replace ? Color.orange : Color.accentColor)
-                        .frame(width: 20)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(destinationTitle)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.primary)
-                        Text(outputCaption)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 10)
-                .frame(maxWidth: .infinity, minHeight: 42)
+                Text(destinationTitle)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                    .padding(.leading, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 34)
                 .contentShape(Rectangle())
-                .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .menuStyle(.borderlessButton)
+            .frame(height: 34)
             .disabled(isSaving)
             .accessibilityLabel("Save destination")
             .accessibilityValue(destinationTitle)
@@ -274,21 +226,25 @@ extension CompressionDashboard {
                 save()
             } label: {
                 HStack(spacing: 8) {
-                    if isSaving {
+                    if isSaving || (activePreviewStatus.isPending && !activeEstimateAvailable && saveSummary == nil) {
                         ProgressView().controlSize(.small)
+                    } else if activePreviewStatus.failedCount > 0 || (saveSummary?.failedCount ?? 0) > 0 {
+                        Image(systemName: "exclamationmark.triangle.fill")
                     } else if saveConfirmationTitle != nil {
                         Image(systemName: "checkmark.circle.fill")
                     } else {
                         Image(systemName: "arrow.down.circle.fill")
                     }
                     Text(saveButtonTitle)
+                        .lineLimit(1)
                 }
-                .frame(maxWidth: .infinity, minHeight: 26)
+                .frame(maxWidth: .infinity)
+                .frame(height: 26)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .keyboardShortcut("s", modifiers: .command)
-            .disabled(isSaving || items.isEmpty)
+            .disabled(isSaving || !activePreviewStatus.canSave)
             .help("\(saveButtonTitle) (Command-S)")
         }
         .padding(14)
@@ -297,16 +253,8 @@ extension CompressionDashboard {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: saveSummary)
     }
 
-    var outputCaption: String {
-        switch saveDestination {
-        case .copies: "Adds \(store.settings.suffix) to each filename"
-        case .replace: "Changes the selected files in place"
-        case .saveAs: "Choose a name and location"
-        }
-    }
-
     var saveDestination: SaveDestination {
-        if saveAsSelected && items.count == 1 { return .saveAs }
+        if saveAsSelected && activeSaveItems.count == 1 { return .saveAs }
         return store.settings.createCopy ? .copies : .replace
     }
 
@@ -315,14 +263,6 @@ extension CompressionDashboard {
         case .copies: "Save copies"
         case .replace: "Replace originals"
         case .saveAs: "Save As…"
-        }
-    }
-
-    var destinationIcon: String {
-        switch saveDestination {
-        case .copies: "doc.on.doc"
-        case .replace: "arrow.triangle.2.circlepath"
-        case .saveAs: "square.and.arrow.down"
         }
     }
 
@@ -338,7 +278,10 @@ extension CompressionDashboard {
     var saveButtonTitle: String {
         if isSaving { return "Saving…" }
         if let saveConfirmationTitle { return saveConfirmationTitle }
-        let count = items.count
+        if activePreviewStatus.failedCount > 0 {
+            return activePreviewStatus.failedCount == 1 ? "Preview Failed" : "Previews Failed"
+        }
+        let count = activeSaveItems.count
         if count == 0 { return "Save" }
         switch saveDestination {
         case .copies:
@@ -352,9 +295,170 @@ extension CompressionDashboard {
 
     var saveConfirmationTitle: String? {
         guard !isSaving, let summary = saveSummary else { return nil }
-        if summary.writtenCount > 0 { return "Saved" }
-        if summary.skippedCount > 0 { return "Already optimized" }
+        let total = summary.totalCount
+        guard total > 0 else { return nil }
+        if summary.writtenCount == total {
+            switch saveDestination {
+            case .replace:
+                return total == 1 ? "Replaced" : "Replaced \(total) Originals"
+            case .copies:
+                return total == 1 ? "Saved" : "Saved \(total) Copies"
+            case .saveAs:
+                return "Saved"
+            }
+        }
+        if summary.writtenCount > 0 {
+            return "Saved \(summary.writtenCount) of \(total)"
+        }
+        if summary.skippedCount == total { return "Already optimized" }
+        if summary.failedCount == total {
+            return total == 1 ? "Save Failed" : "\(total) Saves Failed"
+        }
+        if summary.skippedCount > 0 && summary.failedCount > 0 {
+            return "\(summary.skippedCount) unchanged · \(summary.failedCount) failed"
+        }
         return nil
     }
 
+    // MARK: - Savings bar
+
+    var savingsBar: some View {
+        let scopedItems = activeSaveItems
+        let estimates = scopedItems.compactMap { previews[$0.url]?.lastKnownOutcome }
+        let status = activePreviewStatus
+        let hasCompleteEstimate = !scopedItems.isEmpty && estimates.count == scopedItems.count
+        let showInitialProgress = status.isPending && !hasCompleteEstimate
+        let original = estimates.reduce(UInt64(0)) { $0 + $1.originalBytes }
+        let output = estimates.reduce(UInt64(0)) { $0 + $1.outputBytes }
+        let saved = Int64(original) - Int64(output)
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(workspaceMode == .batch ? "Estimated batch result" : "Estimated result")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if showInitialProgress { ProgressView().controlSize(.small) }
+            }
+
+            HStack(spacing: 8) {
+                if status.failedCount > 0 {
+                    Text(status.failedCount == 1 ? "1 preview failed" : "\(status.failedCount) previews failed")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Retry") { refreshPreviews() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
+                        .accessibilityLabel("Retry failed previews")
+                } else if hasCompleteEstimate && original > 0 {
+                    let percent = Int((Double(saved) / Double(original) * 100).rounded())
+                    Text(saved == 0
+                         ? Self.byteText(output)
+                         : saved > 0
+                             ? "\(Self.byteText(original)) → \(Self.byteText(output)) (−\(percent)%)"
+                             : "\(Self.byteText(original)) → \(Self.byteText(output))")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(saved == 0
+                         ? "Same size"
+                         : saved > 0
+                             ? "−\(Self.byteText(UInt64(saved)))"
+                             : "No smaller result")
+                        .foregroundStyle(saved > 0 ? .green : .secondary)
+                        .contentTransition(.numericText())
+                } else if status.isPending {
+                    Text(scopedItems.count > 1 && status.readyCount > 0
+                         ? "Calculating \(status.readyCount) of \(status.totalCount)…"
+                         : "Calculating…")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Preview unavailable")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline.weight(.medium).monospacedDigit())
+            .frame(height: 22)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: output)
+    }
+
+
+}
+
+struct ColorReductionSelector: View {
+    let isEnabled: Bool
+    let selectedPreset: ColorReductionPreset?
+    let status: String?
+    let setEnabled: (Bool) -> Void
+    let select: (ColorReductionPreset) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(
+                isOn: Binding(
+                    get: { isEnabled },
+                    set: { newValue in setEnabled(newValue) }
+                )
+            ) {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: "paintpalette.fill")
+                        .foregroundStyle(isEnabled ? Color.orange : Color.secondary)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 7) {
+                            Text("Reduce colors")
+                                .font(.subheadline.weight(.medium))
+                            if let status {
+                                Text(status)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Text("Smaller files; colors may change.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .toggleStyle(.switch)
+            .frame(maxWidth: .infinity)
+
+            if isEnabled {
+                HStack(spacing: 2) {
+                    ForEach(ColorReductionPreset.allCases) { preset in
+                        Button {
+                            select(preset)
+                        } label: {
+                            Text(preset.title)
+                                .font(.caption.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(selectedPreset == preset ? Color.primary : Color.secondary)
+                        .background {
+                            if selectedPreset == preset {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.primary.opacity(0.1))
+                            }
+                        }
+                        .help(preset.help)
+                        .accessibilityAddTraits(selectedPreset == preset ? .isSelected : [])
+                    }
+                }
+                .padding(3)
+                .background(
+                    Color.primary.opacity(0.045),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isEnabled)
+    }
 }

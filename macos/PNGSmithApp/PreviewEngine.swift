@@ -13,7 +13,6 @@ struct PreviewVariant: Hashable, Sendable {
     var oxipngLevel: Int
     var zopfli: Bool
     var metadata: String
-    var preserveTransparentRGB: Bool
     var qualityMin: Int
     var qualityMax: Int
     var automaticStrategy: String?
@@ -34,7 +33,6 @@ struct PreviewVariant: Hashable, Sendable {
         oxipngLevel = settings.oxipngLevel
         zopfli = settings.zopfli
         metadata = settings.metadata
-        preserveTransparentRGB = settings.preserveTransparentRGB
         qualityMin = mode == .shrink ? 0 : settings.qualityMin
         qualityMax = mode == .shrink ? 100 : settings.qualityMax
         self.automaticStrategy = automaticStrategy
@@ -46,14 +44,13 @@ struct PreviewVariant: Hashable, Sendable {
         var token = ".preview-\(coreMode)-\(maxColors)-o\(oxipngLevel)"
         if zopfli { token += "z" }
         token += "-\(metadata)"
-        if preserveTransparentRGB { token += "-t" }
         if coreMode == "perceptual" { token += "-q\(qualityMin)-\(qualityMax)" }
         if let automaticStrategy { token += "-\(automaticStrategy)" }
         return token
     }
 
     fileprivate var cacheToken: String {
-        "\(mode.rawValue)|\(maxColors)|\(oxipngLevel)|\(zopfli)|\(metadata)|\(preserveTransparentRGB)|\(qualityMin)|\(qualityMax)|\(automaticStrategy ?? "manual")|\(verifyPixels)|\(cropToken)"
+        "\(mode.rawValue)|\(maxColors)|\(oxipngLevel)|\(zopfli)|\(metadata)|\(qualityMin)|\(qualityMax)|\(automaticStrategy ?? "manual")|\(verifyPixels)|\(cropToken)"
     }
 
     private var cropToken: String {
@@ -104,6 +101,11 @@ enum PreviewPhase: Equatable {
         return false
     }
 
+    var isInitialLoading: Bool {
+        if case .loading(previous: nil) = self { return true }
+        return false
+    }
+
     var failureMessage: String? {
         if case .failed(let message) = self { return message }
         return nil
@@ -123,13 +125,13 @@ actor PreviewEngine {
     private var neededColors: [URL: Int] = [:]
     private var folderIndex = 0
 
-    func preview(source: URL, variant: PreviewVariant) throws -> PreviewOutcome {
+    func preview(source: URL, variant: PreviewVariant) async throws -> PreviewOutcome {
         let key = "\(source.path)|\(variant.cacheToken)"
         if let cached = outcomes[key], FileManager.default.fileExists(atPath: cached.outputURL.path) {
             return cached
         }
         let copy = try sourceCopy(of: source)
-        let comparisonSourceURL = try comparisonSource(
+        let comparisonSourceURL = try await comparisonSource(
             original: source,
             copy: copy,
             variant: variant
@@ -138,28 +140,28 @@ actor PreviewEngine {
         switch variant.mode {
         case .auto:
             outcome = makeOutcome(
-                try run(copy: copy, coreMode: "smart_lossless", fallback: "lossless", variant: variant),
+                try await run(copy: copy, coreMode: "smart_lossless", fallback: "lossless", variant: variant),
                 source: source,
                 comparisonSourceURL: comparisonSourceURL
             )
         case .shrink:
             if variant.automaticStrategy != nil {
                 outcome = makeOutcome(
-                    try run(copy: copy, coreMode: "automatic_palette", fallback: "lossless", variant: variant),
+                    try await run(copy: copy, coreMode: "automatic_palette", fallback: "lossless", variant: variant),
                     source: source,
                     comparisonSourceURL: comparisonSourceURL
                 )
             } else {
                 do {
                     outcome = makeOutcome(
-                        try run(copy: copy, coreMode: "exact_palette", fallback: "error", variant: variant),
+                        try await run(copy: copy, coreMode: "exact_palette", fallback: "error", variant: variant),
                         source: source,
                         comparisonSourceURL: comparisonSourceURL
                     )
                 } catch {
                     if let needed = Self.colorsNeeded(in: error) { neededColors[source] = needed }
                     outcome = makeOutcome(
-                        try run(copy: copy, coreMode: "perceptual", fallback: "lossless", variant: variant),
+                        try await run(copy: copy, coreMode: "perceptual", fallback: "lossless", variant: variant),
                         source: source,
                         comparisonSourceURL: comparisonSourceURL
                     )
@@ -193,7 +195,7 @@ actor PreviewEngine {
         return destination
     }
 
-    private func run(copy: URL, coreMode: String, fallback: String, variant: PreviewVariant) throws -> PNGSmithResult {
+    private func run(copy: URL, coreMode: String, fallback: String, variant: PreviewVariant) async throws -> PNGSmithResult {
         let request = PNGSmithRequest(
             inputs: [copy.path],
             crop: nil,
@@ -207,7 +209,7 @@ actor PreviewEngine {
                 zopfli: variant.zopfli,
                 preserveMetadata: variant.metadata == "preserve",
                 metadata: variant.metadata,
-                preserveTransparentRGB: variant.preserveTransparentRGB,
+                preserveTransparentRGB: true,
                 allowLosslessPalette: true,
                 scale16Bit: false,
                 maxDecompressedBytes: 512 * 1024 * 1024
@@ -216,7 +218,7 @@ actor PreviewEngine {
             automatic: AutomaticOptions(strategy: variant.automaticStrategy ?? "balanced"),
             verify: VerifyOptions(decodedPixels: variant.verifyPixels)
         )
-        let response = try PNGSmithCore.execute(request)
+        let response = try await PNGSmithCore.executeAsync(request)
         guard let result = response.results.first else {
             throw PNGSmithBridgeError.emptyResponse
         }
@@ -227,7 +229,7 @@ actor PreviewEngine {
         original: URL,
         copy: URL,
         variant: PreviewVariant
-    ) throws -> URL {
+    ) async throws -> URL {
         guard let crop = variant.crop else { return original }
         let key = "\(original.path)|\(crop.width),\(crop.height),\(crop.imageScale),\(crop.imageOffsetX),\(crop.imageOffsetY)"
         if let cached = cropSources[key], FileManager.default.fileExists(atPath: cached.path) {
@@ -250,7 +252,7 @@ actor PreviewEngine {
                 zopfli: false,
                 preserveMetadata: variant.metadata == "preserve",
                 metadata: variant.metadata,
-                preserveTransparentRGB: variant.preserveTransparentRGB,
+                preserveTransparentRGB: true,
                 allowLosslessPalette: false,
                 scale16Bit: false,
                 maxDecompressedBytes: 512 * 1024 * 1024
@@ -259,7 +261,7 @@ actor PreviewEngine {
             automatic: AutomaticOptions(strategy: "balanced"),
             verify: VerifyOptions(decodedPixels: false)
         )
-        let response = try PNGSmithCore.execute(request)
+        let response = try await PNGSmithCore.executeAsync(request)
         guard let result = response.results.first,
               let output = result.output
         else { throw PNGSmithBridgeError.emptyResponse }

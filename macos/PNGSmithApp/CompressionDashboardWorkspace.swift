@@ -35,23 +35,27 @@ extension CompressionDashboard {
                 if items.count > 1 {
                     documentTabBar
                         .frame(height: WorkspaceMetrics.documentTabBarHeight)
-                        .opacity(cropChromeActive ? 0.62 : 1)
-                        .allowsHitTesting(cropEditorItem == nil)
-                        .animation(toolChromeAnimation, value: cropChromeActive)
+                        .opacity(cropToolState.showsChrome ? 0.62 : 1)
+                        .allowsHitTesting(!cropToolState.isActive)
+                        .animation(toolChromeAnimation, value: cropToolState.showsChrome)
                 }
 
                 ZStack {
-                    dashboardWorkspace
-                        .allowsHitTesting(cropEditorItem == nil)
-                        .accessibilityHidden(cropEditorItem != nil)
+                    activeWorkspace
+                        .allowsHitTesting(!cropToolState.isActive)
+                        .accessibilityHidden(cropToolState.isActive)
 
                     if let cropItem = cropEditorItem {
                         CropEditorWorkspace(
                             item: cropItem,
                             initial: cropSelections[cropItem.url] ?? .full,
+                            comparisonDividerPosition: dividerPosition,
+                            comparisonDividerVisible: previews[cropItem.url]?.lastKnownOutcome != nil
+                                && !showingOriginal
+                                && comparisonLayout == .divider,
                             onDismissalStarted: {
                                 withAnimation(toolChromeAnimation) {
-                                    cropChromeActive = false
+                                    beginCropEditorDismissal()
                                 }
                             },
                             onCancel: { closeCropEditor() },
@@ -69,6 +73,17 @@ extension CompressionDashboard {
         }
     }
 
+    @ViewBuilder
+    var activeWorkspace: some View {
+        if workspaceMode == .batch, items.count > 1 {
+            batchReviewWorkspace
+                .transition(workspaceModeTransition)
+        } else {
+            dashboardWorkspace
+                .transition(workspaceModeTransition)
+        }
+    }
+
     var dashboardWorkspace: some View {
         HStack(spacing: 0) {
             mainArea
@@ -78,9 +93,339 @@ extension CompressionDashboard {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    var batchReviewWorkspace: some View {
+        HStack(spacing: 0) {
+            batchReviewMainArea
+            Divider()
+            batchReviewSidebar
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    var batchReviewMainArea: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Batch Review")
+                        .font(.title2.weight(.semibold))
+                    Text("Compare every result, then save the set together.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 300, maximum: 430), spacing: 14)],
+                    spacing: 14
+                ) {
+                    ForEach(items) { item in
+                        batchReviewCard(item)
+                    }
+                }
+            }
+            .padding(18)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    var batchReviewSidebar: some View {
+        let summary = batchOptimizationSummary
+        return VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "rectangle.grid.2x2.fill")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 42, height: 42)
+                        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(items.count) Images")
+                            .font(.headline)
+                        Text(batchStatusText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 14) {
+                    ColorReductionSelector(
+                        isEnabled: summary.colorReductionEnabled,
+                        selectedPreset: summary.preset,
+                        status: summary.status,
+                        setEnabled: setBatchColorReductionEnabled,
+                        select: applyBatchColorReductionPreset
+                    )
+
+                    if summary.colorReductionEnabled {
+                        batchColorCountControl
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: summary.colorReductionEnabled)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer()
+            sidebarFooter
+        }
+        .background(Color(nsColor: .underPageBackgroundColor).opacity(0.5))
+        .frame(width: 330)
+    }
+
+    var batchStatusText: String {
+        let status = previewBatchStatus
+        if status.failedCount > 0 {
+            return "\(status.failedCount) preview\(status.failedCount == 1 ? "" : "s") need attention"
+        }
+        if status.pendingCount > 0 {
+            return "Preparing \(status.pendingCount) preview\(status.pendingCount == 1 ? "" : "s")…"
+        }
+        return "All previews are ready"
+    }
+
+    var batchOptimizationSummary: OptimizationGroupSummary {
+        OptimizationGroupSummary(items.map { optimization(for: $0) })
+    }
+
+    var batchColorCountControl: some View {
+        let summary = batchOptimizationSummary
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Colors")
+                        .font(.subheadline.weight(.medium))
+                    Text(summary.preset == .manual
+                         ? "Same limit for every image"
+                         : "Automatically selected for each image")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Button {
+                    batchColorInput = String(summary.manualColorCount ?? 256)
+                    showBatchColorEditor = true
+                } label: {
+                    Text(summary.manualColorCount.map(String.init) ?? "Set…")
+                        .font(summary.manualColorCount == nil
+                              ? .subheadline.weight(.medium)
+                              : .system(size: 22, weight: .semibold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .frame(minWidth: 66, minHeight: 40)
+                        .background(
+                            Color.primary.opacity(0.065),
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showBatchColorEditor, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Colors for all images")
+                            .font(.headline)
+                        HStack(spacing: 8) {
+                            TextField("2–256", text: $batchColorInput)
+                                .textFieldStyle(.roundedBorder)
+                                .focused($batchColorInputFocused)
+                                .onSubmit(commitBatchColorInput)
+                                .frame(width: 90)
+                            Button("Apply") { commitBatchColorInput() }
+                                .keyboardShortcut(.defaultAction)
+                        }
+                    }
+                    .padding(14)
+                    .onAppear { batchColorInputFocused = true }
+                }
+                .help("Set one maximum color count for every image")
+                .accessibilityLabel("Maximum colors for all images")
+            }
+
+            if summary.preset == .manual {
+                Slider(
+                    value: Binding(
+                        get: { Double(batchOptimizationSummary.manualColorCount ?? 256) },
+                        set: { applyBatchManualColorCount(Int($0.rounded()), debounced: true) }
+                    ),
+                    in: Double(ImageOptimizationSettings.supportedColorRange.lowerBound)...Double(ImageOptimizationSettings.supportedColorRange.upperBound)
+                )
+                .accessibilityLabel("Maximum colors for all images")
+                .accessibilityValue("\(summary.manualColorCount ?? 256)")
+            }
+        }
+    }
+
+    func setBatchColorReductionEnabled(_ isEnabled: Bool) {
+        updateOptimizations(for: items) { $0.reduceColors = isEnabled }
+    }
+
+    func applyBatchColorReductionPreset(_ preset: ColorReductionPreset) {
+        updateOptimizations(for: items) { $0.apply(preset) }
+    }
+
+    func commitBatchColorInput() {
+        guard let value = Int(batchColorInput.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            batchColorInput = String(batchOptimizationSummary.manualColorCount ?? 256)
+            return
+        }
+        applyBatchManualColorCount(value)
+        showBatchColorEditor = false
+    }
+
+    func applyBatchManualColorCount(_ count: Int, debounced: Bool = false) {
+        let clamped = ImageOptimizationSettings.clampedColorCount(count)
+        batchColorInput = String(clamped)
+        updateOptimizations(for: items, debounced: debounced) {
+            $0.applyManualColorCount(clamped)
+        }
+    }
+
+    func batchReviewCard(_ item: WorkItem) -> some View {
+        let phase = previews[item.url]
+        let outcome = phase?.lastKnownOutcome
+        let sourceSize = cropSelections[item.url].map {
+            let options = $0.pixelOptions(imageWidth: item.pixelWidth, imageHeight: item.pixelHeight)
+            return CGSize(width: options.width, height: options.height)
+        } ?? CGSize(width: item.pixelWidth, height: item.pixelHeight)
+
+        return Button {
+            withAnimation(workspaceTransitionAnimation) {
+                selectedURL = item.url
+                workspaceMode = .image
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 1) {
+                    batchReviewThumbnail(
+                        url: outcome?.comparisonSourceURL ?? item.url,
+                        sourceSize: sourceSize,
+                        title: "Before"
+                    )
+                    batchReviewThumbnail(
+                        url: outcome?.outputURL,
+                        sourceSize: sourceSize,
+                        title: "After",
+                        isLoading: phase?.isInitialLoading == true,
+                        failed: phase?.failureMessage != nil
+                    )
+                }
+                .frame(height: 190)
+                .background(Color(nsColor: .underPageBackgroundColor))
+
+                HStack(spacing: 10) {
+                    WorkspaceThumbnailImage(url: item.url)
+                        .frame(width: 34, height: 34)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.url.lastPathComponent)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(batchCardDetail(item: item, phase: phase))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(outcome?.savedBytes ?? 0 > 0 ? Color.green : Color.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(11)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.09))
+        }
+        .contextMenu {
+            Button {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                    remove(item.url)
+                }
+            } label: {
+                Label("Remove", systemImage: "xmark")
+            }
+        }
+        .accessibilityLabel("Review \(item.url.lastPathComponent)")
+    }
+
+    func batchReviewThumbnail(
+        url: URL?,
+        sourceSize: CGSize,
+        title: String,
+        isLoading: Bool = false,
+        failed: Bool = false
+    ) -> some View {
+        GeometryReader { proxy in
+            let frame = CropGeometry.imageRect(
+                source: sourceSize,
+                available: proxy.size,
+                allowsOutsideImage: false,
+                marginScale: 0.08
+            )
+            ZStack {
+                Color(nsColor: .underPageBackgroundColor)
+                if url != nil { WorkspaceImageBackdrop(frame: frame) }
+                if let url {
+                    WorkspaceFileImage(url: url, frame: frame)
+                } else if isLoading {
+                    ProgressView().controlSize(.small)
+                } else if failed {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                VStack {
+                    HStack {
+                        Text(title)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(.regularMaterial, in: Capsule())
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(8)
+            }
+        }
+    }
+
+    func batchCardDetail(item: WorkItem, phase: PreviewPhase?) -> String {
+        switch phase {
+        case .ready(let outcome):
+            if outcome.savedBytes == 0 {
+                return "\(Self.byteText(outcome.outputBytes)) · Same size"
+            }
+            return "\(Self.byteText(item.originalBytes)) → \(Self.byteText(outcome.outputBytes)) (\(percentText(outcome)))"
+        case .failed:
+            return "Preview unavailable"
+        case .loading, nil:
+            return "Optimizing…"
+        }
+    }
+
     func closeCropEditor() {
-        cropChromeActive = false
-        cropEditorItem = nil
+        cropToolState.close()
+    }
+
+    var cropEditorItem: WorkItem? {
+        guard let url = cropToolState.itemURL else { return nil }
+        return items.first { $0.url == url }
+    }
+
+    var cropChromeActive: Bool { cropToolState.showsChrome }
+
+    func presentCropEditor(for item: WorkItem) {
+        cropToolState.present(item.url)
+    }
+
+    func beginCropEditorDismissal() {
+        cropToolState.beginDismissal()
     }
 
     var mainArea: some View {
@@ -189,9 +534,7 @@ extension CompressionDashboard {
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(2)
                         .truncationMode(.middle)
-                    Text(items.count > 1
-                         ? "\((items.firstIndex(of: item) ?? 0) + 1) of \(items.count) · \(Self.byteText(item.originalBytes))"
-                         : Self.byteText(item.originalBytes))
+                    Text(inspectorMetadata(for: item))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -222,24 +565,27 @@ extension CompressionDashboard {
             HStack(spacing: 8) {
                 Button {
                     withAnimation(toolChromeAnimation) {
-                        cropChromeActive = true
-                        cropEditorItem = item
+                        presentCropEditor(for: item)
                     }
                 } label: {
                     Label("Crop", systemImage: "crop")
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .frame(height: 32)
+                        .background(
+                            Color.primary.opacity(0.07),
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
                 .disabled(item.isAnimated)
                 .help(item.isAnimated
                       ? "Animated PNGs are kept intact and cannot be cropped yet"
                       : "Crop this image before compression")
 
-                if let crop = cropSelections[item.url] {
-                    let size = crop.pixelOptions(imageWidth: item.pixelWidth, imageHeight: item.pixelHeight)
-                    Text("\(size.width) × \(size.height)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                if cropSelections[item.url] != nil {
                     Spacer()
                     Button("Reset") {
                         resetCrop(for: item)
@@ -249,480 +595,177 @@ extension CompressionDashboard {
                     .foregroundStyle(Color.accentColor)
                     .help("Remove crop")
                 } else {
-                    Text(item.isAnimated
-                         ? "\(item.frameCount) frames · \(item.pixelWidth) × \(item.pixelHeight)"
-                         : "\(item.pixelWidth) × \(item.pixelHeight)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
                     Spacer()
                 }
+
+                HStack(spacing: 2) {
+                    ForEach(ComparisonLayout.allCases) { layout in
+                        Button {
+                            comparisonLayoutBinding.wrappedValue = layout
+                        } label: {
+                            ComparisonLayoutIcon(
+                                layout: layout,
+                                isSelected: comparisonLayout == layout
+                            )
+                                .frame(width: 19, height: 14)
+                                .frame(width: 30, height: 28)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(comparisonLayout == layout ? Color.white : Color.secondary)
+                        .background(
+                            comparisonLayout == layout ? Color.accentColor : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        )
+                        .help(layout.title)
+                        .accessibilityLabel(layout.title)
+                        .accessibilityAddTraits(comparisonLayout == layout ? .isSelected : [])
+                    }
+                }
+                .padding(2)
+                .background(
+                    Color.primary.opacity(0.07),
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                )
+                .help("Choose hold, divider, left-and-right, or top-and-bottom comparison")
             }
         }
+    }
+
+    func inspectorMetadata(for item: WorkItem) -> String {
+        var components: [String] = []
+        if items.count > 1 {
+            components.append("\((items.firstIndex(of: item) ?? 0) + 1) of \(items.count)")
+        }
+        components.append(Self.byteText(item.originalBytes))
+        let dimensions = cropSelections[item.url]?.pixelOptions(
+            imageWidth: item.pixelWidth,
+            imageHeight: item.pixelHeight
+        )
+        let width = dimensions?.width ?? item.pixelWidth
+        let height = dimensions?.height ?? item.pixelHeight
+        components.append("\(width) × \(height) (\(roundedAspectRatio(width: width, height: height)))")
+        if item.isAnimated {
+            components.append("\(item.frameCount) frames")
+        }
+        return components.joined(separator: " · ")
+    }
+
+    func roundedAspectRatio(width: Int, height: Int) -> String {
+        guard width > 0, height > 0 else { return "—" }
+        let ratio = Double(width) / Double(height)
+        let candidates = [
+            (1, 1), (5, 4), (4, 3), (3, 2), (16, 10), (16, 9), (2, 1), (21, 10),
+            (4, 5), (3, 4), (2, 3), (10, 16), (9, 16), (1, 2), (10, 21)
+        ]
+        let closest = candidates.min {
+            abs(Double($0.0) / Double($0.1) - ratio)
+                < abs(Double($1.0) / Double($1.1) - ratio)
+        } ?? (1, 1)
+        return "\(closest.0):\(closest.1)"
     }
 
     var selectedItem: WorkItem? {
         items.first { $0.url == selectedURL } ?? items.first
     }
 
-    var mode: DashboardMode { reduceColorsEnabled ? .shrink : .auto }
-
-    var maxColors: Double { Double(maxColorCount) }
-
-    var autoColorStrategy: AutoColorStrategy {
-        AutoColorStrategy(rawValue: autoColorStrategyRawValue) ?? .balanced
+    var defaultOptimizationSettings: ImageOptimizationSettings {
+        ImageOptimizationSettings(
+            reduceColors: reduceColorsEnabled,
+            maxColors: maxColorCount,
+            autoColors: autoColorsEnabled,
+            autoStrategy: AutoColorStrategy(rawValue: autoColorStrategyRawValue) ?? .balanced
+        )
     }
 
-    var autoColorStrategyBinding: Binding<AutoColorStrategy> {
+    func optimization(for item: WorkItem) -> ImageOptimizationSettings {
+        imageOptimizations[item.url] ?? defaultOptimizationSettings
+    }
+
+    var selectedOptimization: ImageOptimizationSettings {
+        selectedItem.map { optimization(for: $0) } ?? defaultOptimizationSettings
+    }
+
+    var mode: DashboardMode { selectedOptimization.mode }
+
+    var maxColors: Double { Double(selectedOptimization.maxColors) }
+
+    var comparisonLayout: ComparisonLayout {
+        ComparisonLayout(rawValue: comparisonLayoutRawValue) ?? .hold
+    }
+
+    var comparisonLayoutBinding: Binding<ComparisonLayout> {
         Binding(
-            get: { autoColorStrategy },
-            set: { autoColorStrategyRawValue = $0.rawValue }
+            get: { comparisonLayout },
+            set: { layout in
+                guard layout != comparisonLayout else { return }
+
+                withAnimation(comparisonTransitionAnimation) {
+                    showingOriginal = false
+                    comparisonLayoutRawValue = layout.rawValue
+                }
+            }
         )
     }
 
-    var effectiveColorBudget: Int {
-        guard autoColorsEnabled, let url = selectedItem?.url else { return maxColorCount }
-        return automaticColorBudgets[url] ?? 256
+    var comparisonTransitionAnimation: Animation? {
+        reduceMotion
+            ? nil
+            : .timingCurve(0.77, 0, 0.175, 1, duration: 0.24)
     }
 
-    var documentTabBar: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 3) {
-                    ForEach(items) { item in
-                        documentTab(item)
-                            .id(item.url)
-                    }
+    var workspaceTransitionAnimation: Animation? {
+        reduceMotion
+            ? nil
+            : .easeInOut(duration: 0.18)
+    }
 
-                    Button {
-                        isImporterPresented = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .semibold))
-                            .frame(width: 28, height: 28)
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .focusEffectDisabled()
-                    .foregroundStyle(.secondary)
-                    .background(Color.primary.opacity(0.055), in: Circle())
-                    .help("Add PNGs")
-                    .accessibilityLabel("Add PNGs")
-                    .padding(.leading, 2)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+    var workspaceModeTransition: AnyTransition {
+        reduceMotion
+            ? .identity
+            : .opacity.combined(with: .scale(scale: 0.99, anchor: .center))
+    }
+
+    var previewBatchStatus: PreviewBatchStatus {
+        PreviewBatchStatus(states: items.map { item in
+            switch previews[item.url] {
+            case .ready: .ready
+            case .failed: .failed
+            case .loading, nil: .pending
             }
-            .onChange(of: selectedURL) { _, url in
-                guard let url else { return }
-                proxy.scrollTo(url, anchor: .center)
+        })
+    }
+
+    var activeSaveItems: [WorkItem] {
+        if workspaceMode == .batch { return items }
+        return selectedItem.map { [$0] } ?? []
+    }
+
+    var activePreviewStatus: PreviewBatchStatus {
+        PreviewBatchStatus(states: activeSaveItems.map { item in
+            switch previews[item.url] {
+            case .ready: .ready
+            case .failed: .failed
+            case .loading, nil: .pending
             }
-        }
-        .background(.bar)
-        .overlay(alignment: .bottom) {
-            Divider()
+        })
+    }
+
+    var activeEstimateAvailable: Bool {
+        !activeSaveItems.isEmpty && activeSaveItems.allSatisfy {
+            previews[$0.url]?.lastKnownOutcome != nil
         }
     }
 
-    func documentTab(_ item: WorkItem) -> some View {
-        let phase = previews[item.url]
-        let selected = item.url == selectedItem?.url
-        let hovered = hoveredTabURL == item.url
-        return HStack(spacing: 4) {
-            Button {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.14)) {
-                    selectedURL = item.url
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    WorkspaceThumbnailImage(url: item.url)
-                        .frame(width: 28, height: 28)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .strokeBorder(Color.primary.opacity(0.08))
-                        }
-
-                    Text(item.url.lastPathComponent)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(selected ? .primary : .secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    tabStatus(phase)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusEffectDisabled()
-
-            Button {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
-                    remove(item.url)
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .frame(width: 22, height: 22)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .focusEffectDisabled()
-            .foregroundStyle(.secondary)
-            .background(
-                hoveredTabCloseURL == item.url ? Color.primary.opacity(0.09) : Color.clear,
-                in: Circle()
-            )
-            .opacity(selected || hovered ? 1 : 0)
-            .allowsHitTesting(selected || hovered)
-            .onHover { hovering in
-                hoveredTabCloseURL = hovering ? item.url : nil
-            }
-            .help("Close \(item.url.lastPathComponent)")
-            .accessibilityLabel("Close \(item.url.lastPathComponent)")
-        }
-        .frame(width: 190, height: 36)
-        .padding(.horizontal, 6)
-        .background(
-            selected
-                ? Color.primary.opacity(0.09)
-                : hovered ? Color.primary.opacity(0.045) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+    var replacementRisk: ReplacementRisk {
+        ReplacementRisk(
+            hasCropEdits: activeSaveItems.contains { cropSelections[$0.url] != nil },
+            hasLossyPreviews: activeSaveItems.contains { previews[$0.url]?.readyOutcome?.lossy == true }
         )
-        .overlay(alignment: .leading) {
-            Capsule()
-                .fill(Color.accentColor)
-                .frame(width: 2, height: 24)
-                .opacity(tabDropTargetURL == item.url ? 1 : 0)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.1)) {
-                hoveredTabURL = hovering ? item.url : nil
-            }
-            if !hovering, hoveredTabCloseURL == item.url {
-                hoveredTabCloseURL = nil
-            }
-        }
-        .draggable(item.url) {
-            Label(item.url.lastPathComponent, systemImage: "photo")
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .padding(.horizontal, 10)
-                .frame(height: 32)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        }
-        .dropDestination(for: URL.self) { urls, _ in
-            if let movingURL = urls.first,
-               items.contains(where: { $0.url == movingURL }) {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
-                    moveImageTab(movingURL, before: item.url)
-                }
-                tabDropTargetURL = nil
-                return true
-            }
-            let added = add(urls)
-            tabDropTargetURL = nil
-            return added
-        } isTargeted: { targeted in
-            tabDropTargetURL = targeted ? item.url : nil
-        }
-        .accessibilityLabel(item.url.lastPathComponent)
-        .accessibilityValue(selected ? "Selected" : tabAccessibilityStatus(phase))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .contextMenu {
-            Button("Close") { remove(item.url) }
-            Divider()
-            Button("Reveal in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([item.url])
-            }
-        }
-    }
-
-    func tabAccessibilityStatus(_ phase: PreviewPhase?) -> String {
-        switch phase {
-        case .ready(let outcome): percentText(outcome)
-        case .failed: "Preview failed"
-        case .loading, nil: "Calculating preview"
-        }
-    }
-
-    @ViewBuilder
-    func tabStatus(_ phase: PreviewPhase?) -> some View {
-        switch phase {
-        case .ready(let outcome):
-            Text(percentText(outcome))
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(outcome.savedBytes > 0 ? Color.green : Color.secondary)
-        case .failed:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.orange)
-        case .loading, nil:
-            ProgressView().controlSize(.mini)
-        }
-    }
-
-    // MARK: - Comparison
-
-    var comparison: some View {
-        let item = selectedItem
-        let phase = item.flatMap { previews[$0.url] }
-        let outcome = phase?.lastKnownOutcome
-        return comparisonCanvas(item: item, phase: phase, outcome: outcome)
-    }
-
-    func comparisonCanvas(item: WorkItem?, phase: PreviewPhase?, outcome: PreviewOutcome?) -> some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let height = proxy.size.height
-            let sourceSize = item.map { item in
-                if let crop = cropSelections[item.url] {
-                    let output = crop.pixelOptions(
-                        imageWidth: item.pixelWidth,
-                        imageHeight: item.pixelHeight
-                    )
-                    return CGSize(width: output.width, height: output.height)
-                }
-                return CGSize(width: item.pixelWidth, height: item.pixelHeight)
-            } ?? .zero
-            let imageFrame = CropGeometry.imageRect(
-                source: sourceSize,
-                available: proxy.size,
-                allowsOutsideImage: false,
-                marginScale: 0
-            )
-            ZStack {
-                Color(nsColor: .underPageBackgroundColor)
-                if item != nil {
-                    WorkspaceImageBackdrop(frame: imageFrame)
-                }
-                if let outputURL = outcome?.outputURL {
-                    comparisonImage(outputURL, frame: imageFrame)
-                }
-                if let item {
-                    comparisonImage(outcome?.comparisonSourceURL ?? item.url, frame: imageFrame)
-                        .mask(alignment: .leading) {
-                            if outcome != nil {
-                                Rectangle().frame(width: showingOriginal ? width : width * dividerPosition)
-                            } else {
-                                Rectangle()
-                            }
-                        }
-                }
-                if outcome != nil && !showingOriginal {
-                    dividerControl(width: width, height: height)
-                        .opacity(cropChromeActive ? 0 : 1)
-                        .scaleEffect(cropChromeActive ? 0.96 : 1)
-                        .animation(toolChromeAnimation, value: cropChromeActive)
-                }
-                comparisonLabels(item: item, phase: phase, outcome: outcome)
-                    .opacity(cropChromeActive ? 0 : 1)
-                    .offset(y: cropChromeActive ? -14 : 0)
-                    .scaleEffect(cropChromeActive ? 0.985 : 1, anchor: .top)
-                    .animation(toolChromeAnimation, value: cropChromeActive)
-                    .allowsHitTesting(false)
-                if outcome != nil {
-                    VStack {
-                        Spacer()
-                        holdToCompareButton
-                    }
-                    .padding(.bottom, 12)
-                    .opacity(cropChromeActive ? 0 : 1)
-                    .offset(y: cropChromeActive ? 32 : 0)
-                    .scaleEffect(cropChromeActive ? 0.92 : 1, anchor: .bottom)
-                    .animation(toolChromeAnimation, value: cropChromeActive)
-                }
-                if phase?.isLoading == true {
-                    VStack {
-                        HStack(spacing: 7) {
-                            ProgressView().controlSize(.small)
-                            Text("Optimizing preview…")
-                        }
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(.regularMaterial, in: Capsule())
-                        .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
-                        Spacer()
-                    }
-                    .padding(.top, 12)
-                    .allowsHitTesting(false)
-                }
-                if let failure = phase?.failureMessage {
-                    VStack {
-                        Spacer()
-                        Label(failure, systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.leading)
-                            .padding(12)
-                            .frame(maxWidth: 420, alignment: .leading)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-                    }
-                    .padding(14)
-                    .allowsHitTesting(false)
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .named("comparison"))
-                    .onChanged { value in
-                        guard outcome != nil, width > 0 else { return }
-                        dividerPosition = min(max(value.location.x / width, 0.02), 0.98)
-                    }
-            )
-            .coordinateSpace(name: "comparison")
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.1))
-        }
-        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Before and after image preview")
-    }
-
-    func comparisonImage(_ url: URL, frame: CGRect) -> some View {
-        WorkspaceFileImage(url: url, frame: frame)
-    }
-
-    func comparisonLabels(item: WorkItem?, phase: PreviewPhase?, outcome: PreviewOutcome?) -> some View {
-        VStack {
-            HStack {
-                if let item {
-                    overlayChip(
-                        cropSelections[item.url] == nil
-                            ? "Original · \(Self.byteText(item.originalBytes))"
-                            : "Cropped original · \(Self.byteText(item.originalBytes))"
-                    )
-                }
-                Spacer()
-                if let outcome {
-                    overlayChip(
-                        "Optimized · \(Self.byteText(outcome.outputBytes)) · \(percentText(outcome))",
-                        tint: outcome.savedBytes > 0 ? .green : .secondary
-                    )
-                }
-            }
-            Spacer()
-        }
-        .padding(12)
-    }
-
-    var holdToCompareButton: some View {
-        Button {} label: {
-            Label(
-                showingOriginal ? "Original" : "Hold for original",
-                systemImage: showingOriginal ? "photo.fill" : "hand.tap"
-            )
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .background(.regularMaterial, in: Capsule())
-            .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
-        }
-        .buttonStyle(HoldToCompareButtonStyle(isShowingOriginal: $showingOriginal))
-        .help("Press and hold to show the original. Drag the divider for a split comparison.")
-        .accessibilityLabel("Show original while pressed")
-    }
-
-    func overlayChip(_ text: String, tint: Color = .primary) -> some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .monospacedDigit()
-            .contentTransition(.numericText())
-            .foregroundStyle(tint)
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.regularMaterial, in: Capsule())
-            .shadow(color: .black.opacity(0.08), radius: 4, y: 1)
-    }
-
-    func dividerControl(width: CGFloat, height: CGFloat) -> some View {
-        ZStack {
-            Rectangle()
-                .fill(Color.white.opacity(0.92))
-                .frame(width: 1.5)
-                .shadow(color: .black.opacity(0.35), radius: 2)
-            Circle()
-                .fill(.white)
-                .frame(width: 30, height: 30)
-                .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
-                .overlay {
-                    Image(systemName: "arrow.left.and.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.black.opacity(0.7))
-                }
-        }
-        .frame(width: 44, height: height)
-        .position(x: width * dividerPosition, y: height / 2)
-        .allowsHitTesting(false)
-        .accessibilityLabel("Comparison divider")
-        .accessibilityValue("\(Int(dividerPosition * 100)) percent original")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: dividerPosition = min(dividerPosition + 0.1, 0.98)
-            case .decrement: dividerPosition = max(dividerPosition - 0.1, 0.02)
-            @unknown default: break
-            }
-        }
     }
 
     var toolChromeAnimation: Animation? {
         reduceMotion ? nil : .spring(duration: 0.22, bounce: 0.08)
-    }
-
-    // MARK: - Savings bar
-
-    var savingsBar: some View {
-        let ready = items.compactMap { previews[$0.url]?.readyOutcome }
-        let anyLoading = items.contains { previews[$0.url]?.isLoading == true }
-        let original = ready.reduce(UInt64(0)) { $0 + $1.originalBytes }
-        let output = ready.reduce(UInt64(0)) { $0 + $1.outputBytes }
-        let saved = Int64(original) - Int64(output)
-        return VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text(items.count == 1 ? "Estimated result" : "Estimated batch result")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if anyLoading { ProgressView().controlSize(.small) }
-            }
-
-            HStack(spacing: 8) {
-                if anyLoading {
-                    Text(items.count > 1 && !ready.isEmpty
-                         ? "Calculating \(ready.count) of \(items.count)…"
-                         : "Calculating…")
-                        .foregroundStyle(.secondary)
-                } else if original > 0 {
-                    let percent = Int((Double(saved) / Double(original) * 100).rounded())
-                    Text(saved > 0
-                         ? "\(Self.byteText(original)) → \(Self.byteText(output)) (−\(percent)%)"
-                         : "\(Self.byteText(original)) → \(Self.byteText(output))")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(saved > 0
-                         ? "−\(Self.byteText(UInt64(saved)))"
-                         : "No smaller result")
-                        .foregroundStyle(saved > 0 ? .green : .secondary)
-                        .contentTransition(.numericText())
-                } else {
-                    Text("Preview unavailable")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .font(.subheadline.weight(.medium).monospacedDigit())
-            .frame(height: 22)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: output)
     }
 
 }

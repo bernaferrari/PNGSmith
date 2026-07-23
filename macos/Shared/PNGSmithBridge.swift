@@ -18,6 +18,18 @@ enum PNGSmithBridgeError: LocalizedError {
 }
 
 enum PNGSmithCore {
+    /// Runs CPU-heavy Rust work away from cooperative Swift executors. The
+    /// medium priority matches the worker threads used by the compression
+    /// libraries and avoids priority inversions during interactive previews.
+    static func executeAsync(
+        _ request: PNGSmithRequest,
+        priority: TaskPriority = .medium
+    ) async throws -> PNGSmithResponse {
+        try await Task.detached(priority: priority) {
+            try execute(request)
+        }.value
+    }
+
     static func execute(_ request: PNGSmithRequest) throws -> PNGSmithResponse {
         let requestData = try JSONEncoder().encode(request)
         guard let requestJSON = String(data: requestData, encoding: .utf8) else {
@@ -37,4 +49,3 @@ enum PNGSmithCore {
         return response
     }
 }
-

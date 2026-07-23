@@ -12,6 +12,13 @@ pub struct AutomaticResult {
 }
 
 #[cfg(feature = "perceptual")]
+struct EncodedPalette {
+    bytes: Vec<u8>,
+    palette_entries: usize,
+    quality: u8,
+}
+
+#[cfg(feature = "perceptual")]
 pub fn encode(
     source: &[u8],
     max_colors: u16,
@@ -20,7 +27,8 @@ pub fn encode(
 ) -> Result<(Vec<u8>, usize), Error> {
     let image = decode(source, max_bytes)?;
     let pixels = rgba8(&image);
-    encode_decoded(&image, &pixels, max_colors, config)
+    let encoded = encode_decoded(&image, &pixels, max_colors, config)?;
+    Ok((encoded.bytes, encoded.palette_entries))
 }
 
 #[cfg(feature = "perceptual")]
@@ -32,52 +40,56 @@ pub fn encode_automatic(
 ) -> Result<AutomaticResult, Error> {
     let image = decode(source, max_bytes)?;
     let pixels = rgba8(&image);
-    let quality = PerceptualOptions {
-        quality_min: strategy.minimum_quality(),
-        quality_max: 100,
-    };
-    let mut lower_bound = 2;
-    let mut upper_bound = max_colors;
-    let mut best: Option<AutomaticResult> = None;
-
-    while lower_bound <= upper_bound {
-        let candidate = lower_bound + (upper_bound - lower_bound) / 2;
-        match encode_decoded(&image, &pixels, candidate, &quality) {
-            Ok((bytes, palette_entries)) => {
-                best = Some(AutomaticResult {
-                    bytes,
-                    palette_entries,
-                    color_budget: candidate,
-                });
-                if candidate == 2 {
-                    break;
-                }
-                upper_bound = candidate - 1;
-            }
-            Err(Error::ImageQuant(imagequant::Error::QualityTooLow)) => {
-                lower_bound = candidate + 1;
-            }
-            Err(error) => return Err(error),
-        }
-    }
-
-    if let Some(best) = best {
-        return Ok(best);
-    }
-
-    // Match the app's existing behavior: if even the full palette misses the
-    // strategy's quality floor, still produce a 256-color candidate instead of
-    // turning Auto into an unexpected lossless fallback.
     let unrestricted = PerceptualOptions {
         quality_min: 0,
         quality_max: 100,
     };
-    let (bytes, palette_entries) = encode_decoded(&image, &pixels, max_colors, &unrestricted)?;
-    Ok(AutomaticResult {
-        bytes,
-        palette_entries,
+
+    // Some continuous-tone images cannot reach the nominal quality floor even
+    // with all 256 palette entries. The previous fallback returned that same
+    // unrestricted 256-color result for both strategies, making Smaller
+    // indistinguishable from Balanced. Anchor the search to the best quality
+    // this particular image can achieve, then preserve a meaningful quality
+    // gap between the strategies when the nominal floors are unreachable.
+    let maximum = encode_decoded(&image, &pixels, max_colors, &unrestricted)?;
+    let quality_floor = effective_quality_floor(strategy, maximum.quality);
+    let mut lower_bound = 2;
+    let mut upper_bound = max_colors.saturating_sub(1);
+    let mut best = AutomaticResult {
+        bytes: maximum.bytes,
+        palette_entries: maximum.palette_entries,
         color_budget: max_colors,
-    })
+    };
+
+    while lower_bound <= upper_bound {
+        let candidate = lower_bound + (upper_bound - lower_bound) / 2;
+        let encoded = encode_decoded(&image, &pixels, candidate, &unrestricted)?;
+        if encoded.quality >= quality_floor {
+            best = AutomaticResult {
+                bytes: encoded.bytes,
+                palette_entries: encoded.palette_entries,
+                color_budget: candidate,
+            };
+            if candidate == 2 {
+                break;
+            }
+            upper_bound = candidate - 1;
+        } else {
+            lower_bound = candidate + 1;
+        }
+    }
+
+    Ok(best)
+}
+
+#[cfg(feature = "perceptual")]
+fn effective_quality_floor(strategy: AutoColorStrategy, maximum_quality: u8) -> u8 {
+    match strategy {
+        AutoColorStrategy::Balanced => strategy.minimum_quality().min(maximum_quality),
+        AutoColorStrategy::Smaller => strategy
+            .minimum_quality()
+            .min(maximum_quality.saturating_sub(8)),
+    }
 }
 
 #[cfg(feature = "perceptual")]
@@ -101,7 +113,7 @@ fn encode_decoded(
     pixels: &[imagequant::RGBA],
     max_colors: u16,
     config: &PerceptualOptions,
-) -> Result<(Vec<u8>, usize), Error> {
+) -> Result<EncodedPalette, Error> {
     let mut attributes = imagequant::new();
     attributes.set_max_colors(max_colors as u32)?;
     attributes.set_quality(config.quality_min, config.quality_max)?;
@@ -112,6 +124,7 @@ fn encode_decoded(
         0.0,
     )?;
     let mut result = attributes.quantize(&mut quant_image)?;
+    let quality = result.quantization_quality().unwrap_or(100);
     result.set_dithering_level(1.0)?;
     let (palette, indices) = result.remapped(&mut quant_image)?;
     let rgb: Vec<u8> = palette.iter().flat_map(|c| [c.r, c.g, c.b]).collect();
@@ -131,7 +144,11 @@ fn encode_decoded(
         let mut writer = encoder.write_header()?;
         writer.write_image_data(&indices)?;
     }
-    Ok((encoded, palette.len()))
+    Ok(EncodedPalette {
+        bytes: encoded,
+        palette_entries: palette.len(),
+        quality,
+    })
 }
 
 #[cfg(not(feature = "perceptual"))]
