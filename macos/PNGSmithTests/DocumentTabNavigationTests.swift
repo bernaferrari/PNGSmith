@@ -6,6 +6,28 @@ final class DocumentTabNavigationTests: XCTestCase {
     private let second = URL(fileURLWithPath: "/tmp/second.png")
     private let third = URL(fileURLWithPath: "/tmp/third.png")
 
+    func testDraggingFirstTabOntoLastMovesItToTheRightmostPosition() {
+        XCTAssertEqual(
+            DocumentTabNavigation.reordered(
+                [first, second, third],
+                moving: first,
+                to: third
+            ),
+            [second, third, first]
+        )
+    }
+
+    func testDraggingLastTabOntoFirstMovesItToTheLeftmostPosition() {
+        XCTAssertEqual(
+            DocumentTabNavigation.reordered(
+                [first, second, third],
+                moving: third,
+                to: first
+            ),
+            [third, first, second]
+        )
+    }
+
     func testClosingTheSelectedTabChoosesItsRightNeighbor() {
         let selection = DocumentTabNavigation.selection(
             afterRemoving: second,

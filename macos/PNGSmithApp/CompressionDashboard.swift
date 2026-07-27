@@ -34,6 +34,8 @@ struct CompressionDashboard: View {
     @State var generation = 0
     @State var sliderDebounce: Task<Void, Never>?
     @State var isImporterPresented = false
+    @State var isReplacementImporterPresented = false
+    @State var replacementTargetURL: URL?
     @State var isDropTargeted = false
     @State var isSaving = false
     @State var saveSummary: SaveSummary?
@@ -48,9 +50,12 @@ struct CompressionDashboard: View {
     @State var showingOriginal = false
     @State var didRestoreOpenSession = false
     @State var hoveredRemoveURL: URL?
+    @State var hoveredReplaceURL: URL?
     @State var hoveredTabURL: URL?
     @State var hoveredTabCloseURL: URL?
+    @State var draggingTabURL: URL?
     @State var tabDropTargetURL: URL?
+    @State var tabDropIndicatorOnTrailingEdge = false
     @State var cropSelections: [URL: CanvasEdit] = [:]
     @State var imageOptimizations: [URL: ImageOptimizationSettings] = [:]
     @State var workspaceMode: DashboardWorkspaceMode = .image
@@ -118,6 +123,23 @@ struct CompressionDashboard: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result { add(urls) }
+        }
+        .fileImporter(
+            isPresented: $isReplacementImporterPresented,
+            allowedContentTypes: [.png],
+            allowsMultipleSelection: false
+        ) { result in
+            defer { replacementTargetURL = nil }
+            switch result {
+            case .success(let urls):
+                guard let replacementTargetURL, let replacementURL = urls.first else { return }
+                replaceImage(at: replacementTargetURL, with: replacementURL)
+            case .failure(let error):
+                let cocoaError = error as NSError
+                if cocoaError.code != NSUserCancelledError {
+                    errorMessage = error.localizedDescription
+                }
+            }
         }
         .dropDestination(for: URL.self) { urls, _ in
             add(urls)
@@ -286,10 +308,11 @@ extension CompressionDashboard {
                 : hovered ? Color.primary.opacity(0.045) : Color.clear,
             in: RoundedRectangle(cornerRadius: 7, style: .continuous)
         )
-        .overlay(alignment: .leading) {
+        .overlay(alignment: tabDropIndicatorOnTrailingEdge ? .trailing : .leading) {
             Capsule()
                 .fill(Color.accentColor)
-                .frame(width: 2, height: 24)
+                .frame(width: 3, height: 28)
+                .shadow(color: Color.accentColor.opacity(0.55), radius: 3)
                 .opacity(tabDropTargetURL == item.url ? 1 : 0)
         }
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -308,21 +331,42 @@ extension CompressionDashboard {
                 .padding(.horizontal, 10)
                 .frame(height: 32)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .onAppear {
+                    draggingTabURL = item.url
+                }
+                .onDisappear {
+                    if draggingTabURL == item.url {
+                        draggingTabURL = nil
+                    }
+                }
         }
         .dropDestination(for: URL.self) { urls, _ in
             if let movingURL = urls.first,
                items.contains(where: { $0.url == movingURL }) {
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
-                    moveImageTab(movingURL, before: item.url)
+                    moveImageTab(movingURL, to: item.url)
                 }
+                draggingTabURL = nil
                 tabDropTargetURL = nil
                 return true
             }
             let added = add(urls)
+            draggingTabURL = nil
             tabDropTargetURL = nil
             return added
         } isTargeted: { targeted in
-            tabDropTargetURL = targeted ? item.url : nil
+            if targeted {
+                tabDropTargetURL = item.url
+                if let draggingTabURL,
+                   let sourceIndex = items.firstIndex(where: { $0.url == draggingTabURL }),
+                   let targetIndex = items.firstIndex(where: { $0.url == item.url }) {
+                    tabDropIndicatorOnTrailingEdge = sourceIndex < targetIndex
+                } else {
+                    tabDropIndicatorOnTrailingEdge = false
+                }
+            } else if tabDropTargetURL == item.url {
+                tabDropTargetURL = nil
+            }
         }
         .accessibilityLabel(item.url.lastPathComponent)
         .accessibilityValue(selected ? "Selected" : tabAccessibilityStatus(phase))

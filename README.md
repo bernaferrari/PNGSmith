@@ -14,6 +14,10 @@
 
 ## Preview the real output
 
+<p align="center">
+  <img src="docs/assets/app-screenshot.png" alt="PNGSmith previewing balanced color reduction for a PNG" width="100%">
+</p>
+
 PNGSmith creates the optimized file before you save it. The preview and reported size come from that file—not an approximation.
 
 - **Lossless compression** rewrites inefficient encoding while keeping decoded pixels identical.

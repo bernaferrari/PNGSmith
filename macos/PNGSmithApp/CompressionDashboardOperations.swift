@@ -299,15 +299,71 @@ extension CompressionDashboard {
         remove(selectedURL)
     }
 
-    func moveImageTab(_ movingURL: URL, before targetURL: URL) {
+    func presentReplacementPicker(for item: WorkItem) {
+        replacementTargetURL = item.url
+        isReplacementImporterPresented = true
+    }
+
+    func replaceImage(at currentURL: URL, with replacementURL: URL) {
+        let replacementURL = replacementURL.standardizedFileURL
+        guard replacementURL.pathExtension.caseInsensitiveCompare("png") == .orderedSame else {
+            errorMessage = "PNGSmith only accepts PNG files."
+            return
+        }
+        guard let index = items.firstIndex(where: { $0.url == currentURL }) else { return }
+        guard replacementURL != currentURL.standardizedFileURL else { return }
+        guard !items.contains(where: { $0.url.standardizedFileURL == replacementURL }) else {
+            errorMessage = "That PNG is already open."
+            return
+        }
+
+        let previousItem = items[index]
+        let scoped = replacementURL.startAccessingSecurityScopedResource()
+        let attributes = try? FileManager.default.attributesOfItem(atPath: replacementURL.path)
+        let bytes = (attributes?[.size] as? NSNumber)?.uint64Value ?? 0
+        let properties = Self.imageProperties(at: replacementURL)
+        let previousOptimization = imageOptimizations[currentURL] ?? defaultOptimizationSettings
+
+        if cropToolState.itemURL == currentURL {
+            cropToolState.close()
+        }
+        if previousItem.securityScoped {
+            currentURL.stopAccessingSecurityScopedResource()
+        }
+
+        items[index] = WorkItem(
+            url: replacementURL,
+            securityScoped: scoped,
+            originalBytes: bytes,
+            pixelWidth: properties.width,
+            pixelHeight: properties.height,
+            frameCount: properties.frameCount
+        )
+        previews[currentURL] = nil
+        automaticColorBudgets[currentURL] = nil
+        cropSelections[currentURL] = nil
+        imageOptimizations[currentURL] = nil
+        imageOptimizations[replacementURL] = previousOptimization
+        selectedURL = replacementURL
+        workspaceMode = .image
+        hoveredReplaceURL = nil
+        saveSummary = nil
+        errorMessage = nil
+
+        NSDocumentController.shared.noteNewRecentDocumentURL(replacementURL)
+        rememberImageOptimizations()
+        rememberOpenSession()
+        refreshPreviews(for: [replacementURL])
+        Task { await PreviewEngine.shared.forget(source: currentURL) }
+    }
+
+    func moveImageTab(_ movingURL: URL, to targetURL: URL) {
         guard movingURL != targetURL,
-              let sourceIndex = items.firstIndex(where: { $0.url == movingURL }),
-              let targetIndex = items.firstIndex(where: { $0.url == targetURL })
+              let movingItem = items.first(where: { $0.url == movingURL }),
+              let targetItem = items.first(where: { $0.url == targetURL })
         else { return }
 
-        let item = items.remove(at: sourceIndex)
-        let insertionIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
-        items.insert(item, at: insertionIndex)
+        items = DocumentTabNavigation.reordered(items, moving: movingItem, to: targetItem)
         rememberOpenSession()
     }
 

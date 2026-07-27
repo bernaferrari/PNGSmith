@@ -522,13 +522,39 @@ extension CompressionDashboard {
     func inspectorFileHeader(_ item: WorkItem) -> some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(spacing: 12) {
-                WorkspaceThumbnailImage(url: item.url)
-                .frame(width: 54, height: 54)
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.08))
+                Button {
+                    presentReplacementPicker(for: item)
+                } label: {
+                    WorkspaceThumbnailImage(url: item.url)
+                        .frame(width: 54, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(Color.black.opacity(hoveredReplaceURL == item.url ? 0.24 : 0))
+
+                            Image(systemName: "rectangle.2.swap")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 28, height: 28)
+                                .background(Color.black.opacity(0.52), in: Circle())
+                                .opacity(hoveredReplaceURL == item.url ? 1 : 0)
+                                .allowsHitTesting(false)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08))
+                        }
                 }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .onHover { hovering in
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: hovering ? 0.14 : 0.09)) {
+                        hoveredReplaceURL = hovering ? item.url : nil
+                    }
+                }
+                .help("Replace image…")
+                .accessibilityLabel("Replace \(item.url.lastPathComponent)")
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.url.lastPathComponent)
                         .font(.subheadline.weight(.semibold))

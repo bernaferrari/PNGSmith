@@ -17,6 +17,22 @@ struct WorkItem: Identifiable, Equatable, Sendable {
 }
 
 enum DocumentTabNavigation {
+    static func reordered<Element: Equatable>(
+        _ elements: [Element],
+        moving: Element,
+        to target: Element
+    ) -> [Element] {
+        guard moving != target,
+              let sourceIndex = elements.firstIndex(of: moving),
+              let targetIndex = elements.firstIndex(of: target)
+        else { return elements }
+
+        var reordered = elements
+        let movingElement = reordered.remove(at: sourceIndex)
+        reordered.insert(movingElement, at: min(targetIndex, reordered.endIndex))
+        return reordered
+    }
+
     static func selection(
         afterRemoving removed: URL,
         from orderedURLs: [URL],
