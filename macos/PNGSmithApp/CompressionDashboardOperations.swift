@@ -704,7 +704,7 @@ extension CompressionDashboard {
     func scheduleClipboardConfirmationReset(for url: URL) {
         clipboardConfirmationTask?.cancel()
         clipboardConfirmationTask = Task {
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .milliseconds(1_200))
             guard !Task.isCancelled, copiedToClipboardURL == url else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                 copiedToClipboardURL = nil
