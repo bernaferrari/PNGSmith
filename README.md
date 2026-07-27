@@ -15,7 +15,7 @@
 ## Preview the real output
 
 <p align="center">
-  <img src="docs/assets/app-screenshot.png" alt="PNGSmith previewing balanced color reduction for a PNG" width="100%">
+  <img src="docs/assets/app-preview.png" alt="PNGSmith reducing a PNG to 100 colors with an 80% size reduction" width="100%">
 </p>
 
 PNGSmith creates the optimized file before you save it. The preview and reported size come from that file—not an approximation.
