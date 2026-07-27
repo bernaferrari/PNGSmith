@@ -16,7 +16,7 @@ PNGSmith compresses PNG files on macOS. Drop in an image or a folder, compare th
 Compression runs locally, and metadata is preserved by default.
 
 <p align="center">
-  <img src="docs/assets/app-preview.png" alt="PNGSmith comparing an original PNG with a compressed version" width="1000">
+  <img src="docs/assets/compression-preview-dark.png" alt="PNGSmith compressing a PNG in dark mode" width="1000">
 </p>
 
 ## Features
@@ -30,6 +30,10 @@ Compression runs locally, and metadata is preserved by default.
 - **Animated PNG support** — Preserve every frame; PNGSmith automatically uses lossless compression
 - **macOS automation** — Use PNGSmith from Finder Quick Actions, Services, Shortcuts, or the CLI
 - **Session restore** — Reopen the images from your previous session
+
+<p align="center">
+  <img src="docs/assets/batch-review-light.png" alt="PNGSmith reviewing two compressed images in light mode" width="1000">
+</p>
 
 ## Compression Modes
 
@@ -76,3 +80,7 @@ The app, Finder integrations, Shortcuts action, and CLI all use the same Rust co
 ## Development
 
 See the [developer guide](docs/DEVELOPMENT.md) for builds, tests, architecture, the JSON API, and releases.
+
+<p align="center">
+  <img src="docs/assets/crop-editor-dark.png" alt="PNGSmith crop editor at 250% zoom" width="1000">
+</p>
