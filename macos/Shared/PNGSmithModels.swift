@@ -139,7 +139,7 @@ struct PNGSmithSettings: Codable, Sendable, Equatable {
     var mode = "smart_lossless"
     var maxColors = 256
     var fallback = "lossless"
-    var createCopy = true
+    var createCopy = false
     var suffix = "_min"
     var onlyIfSmaller = true
     var oxipngLevel = 4

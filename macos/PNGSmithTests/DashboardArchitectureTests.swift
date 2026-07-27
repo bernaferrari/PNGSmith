@@ -2,6 +2,10 @@ import XCTest
 @testable import PNGSmith
 
 final class DashboardArchitectureTests: XCTestCase {
+    func testAppDefaultsToReplacingOriginals() {
+        XCTAssertFalse(PNGSmithSettings().createCopy)
+    }
+
     func testCropDimensionsAcceptSafeArithmeticExpressions() {
         XCTAssertEqual(CropDimensionExpression.pixels(from: "1000*0.3"), 300)
         XCTAssertEqual(CropDimensionExpression.pixels(from: "1920 / 2"), 960)
