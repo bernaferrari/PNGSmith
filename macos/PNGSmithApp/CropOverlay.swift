@@ -85,7 +85,7 @@ extension CropEditorWorkspace {
             ForEach(CropHandle.edges, id: \.self) { handle in
                 handleView(handle, frame: frame, base: base, workspace: editingBounds)
                     .opacity(cropFramePresented ? 1 : 0)
-                    .allowsHitTesting(cropFramePresented)
+                    .allowsHitTesting(cropFramePresented && viewZoom <= 1.001)
             }
 
             // Corners sit above the edge hit regions so diagonal resizing wins
@@ -93,7 +93,7 @@ extension CropEditorWorkspace {
             ForEach(CropHandle.corners, id: \.self) { handle in
                 handleView(handle, frame: frame, base: base, workspace: editingBounds)
                     .opacity(cropFramePresented ? 1 : 0)
-                    .allowsHitTesting(cropFramePresented)
+                    .allowsHitTesting(cropFramePresented && viewZoom <= 1.001)
             }
 
         }
@@ -107,10 +107,10 @@ extension CropEditorWorkspace {
                     activeHandle.cursor.set()
                 } else if isPanningViewport {
                     NSCursor.closedHand.set()
-                } else if let handle = CropGeometry.handle(at: location, frame: frame) {
-                    handle.cursor.set()
                 } else if viewZoom > 1 {
                     NSCursor.openHand.set()
+                } else if let handle = CropGeometry.handle(at: location, frame: frame) {
+                    handle.cursor.set()
                 } else {
                     NSCursor.arrow.set()
                 }
