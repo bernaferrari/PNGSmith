@@ -208,7 +208,7 @@ extension CompressionDashboard {
                     .padding(.leading, 2)
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.vertical, 3)
             }
             .onChange(of: selectedURL) { _, url in
                 guard let url else { return }
