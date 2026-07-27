@@ -684,7 +684,11 @@ extension CompressionDashboard {
               let outcome = previews[item.url]?.readyOutcome
         else { return }
 
-        saveConfirmationTask?.cancel()
+        let isPrimaryClipboardAction = saveDestination == .clipboard
+        if isPrimaryClipboardAction {
+            saveConfirmationTask?.cancel()
+        }
+        clipboardConfirmationTask?.cancel()
         isSaving = true
         saveSummary = nil
         errorMessage = nil
@@ -713,11 +717,26 @@ extension CompressionDashboard {
                 error: nil
             )
             isSaving = false
-            saveSummary = SaveSummary(results: [result])
-            scheduleSaveConfirmationReset()
+            copiedToClipboardURL = item.url
+            if isPrimaryClipboardAction {
+                saveSummary = SaveSummary(results: [result])
+                scheduleSaveConfirmationReset()
+            }
+            scheduleClipboardConfirmationReset(for: item.url)
         } catch {
             isSaving = false
             errorMessage = "PNGSmith could not copy that image: \(error.localizedDescription)"
+        }
+    }
+
+    func scheduleClipboardConfirmationReset(for url: URL) {
+        clipboardConfirmationTask?.cancel()
+        clipboardConfirmationTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, copiedToClipboardURL == url else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                copiedToClipboardURL = nil
+            }
         }
     }
 

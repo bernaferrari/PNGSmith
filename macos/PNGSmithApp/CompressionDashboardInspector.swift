@@ -238,37 +238,61 @@ extension CompressionDashboard {
             .accessibilityLabel("Save destination")
             .accessibilityValue(destinationTitle)
 
-            Button {
-                save()
-            } label: {
-                HStack(spacing: 8) {
-                    if isSaving || (activePreviewStatus.isPending && !activeEstimateAvailable && saveSummary == nil) {
-                        ProgressView().controlSize(.small)
-                    } else if activePreviewStatus.failedCount > 0 || (saveSummary?.failedCount ?? 0) > 0 {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                    } else if saveConfirmationTitle != nil {
-                        Image(systemName: "checkmark.circle.fill")
-                    } else if saveDestination == .clipboard {
-                        Image(systemName: "doc.on.clipboard.fill")
-                    } else {
-                        Image(systemName: "arrow.down.circle.fill")
+            HStack(spacing: 8) {
+                Button {
+                    save()
+                } label: {
+                    HStack(spacing: 8) {
+                        if isSaving || (activePreviewStatus.isPending && !activeEstimateAvailable && saveSummary == nil) {
+                            ProgressView().controlSize(.small)
+                        } else if activePreviewStatus.failedCount > 0 || (saveSummary?.failedCount ?? 0) > 0 {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        } else if saveConfirmationTitle != nil {
+                            Image(systemName: "checkmark.circle.fill")
+                        } else if saveDestination == .clipboard {
+                            Image(systemName: "doc.on.clipboard.fill")
+                        } else {
+                            Image(systemName: "arrow.down.circle.fill")
+                        }
+                        Text(saveButtonTitle)
+                            .lineLimit(1)
                     }
-                    Text(saveButtonTitle)
-                        .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 26)
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 26)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(isSaving || !activePreviewStatus.canSave)
+                .help("\(saveButtonTitle) (Command-S)")
+
+                if workspaceMode == .image, selectedItem?.isClipboardItem == false {
+                    Button {
+                        copyPreviewToClipboard()
+                    } label: {
+                        Image(systemName: copiedToClipboardURL == selectedItem?.url
+                              ? "checkmark"
+                              : "doc.on.clipboard")
+                            .frame(width: 24, height: 26)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .disabled(isSaving || !activePreviewStatus.canSave)
+                    .help(copiedToClipboardURL == selectedItem?.url
+                          ? "Copied"
+                          : "Copy optimized image to the clipboard")
+                    .accessibilityLabel(copiedToClipboardURL == selectedItem?.url
+                                        ? "Copied to clipboard"
+                                        : "Copy optimized image to clipboard")
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .keyboardShortcut("s", modifiers: .command)
-            .disabled(isSaving || !activePreviewStatus.canSave)
-            .help("\(saveButtonTitle) (Command-S)")
         }
         .padding(14)
         .background(WorkspaceSurface.inspector)
         .overlay(alignment: .top) { Divider() }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: saveSummary)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: copiedToClipboardURL)
     }
 
     var saveDestination: SaveDestination {

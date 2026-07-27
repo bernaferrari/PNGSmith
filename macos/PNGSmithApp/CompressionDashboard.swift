@@ -44,6 +44,8 @@ struct CompressionDashboard: View {
     @State var isSaving = false
     @State var saveSummary: SaveSummary?
     @State var saveConfirmationTask: Task<Void, Never>?
+    @State var copiedToClipboardURL: URL?
+    @State var clipboardConfirmationTask: Task<Void, Never>?
     @AppStorage(
         PNGSmithSettingsStore.saveAsSelectedKey,
         store: UserDefaults(suiteName: PNGSmithSettingsStore.appGroup) ?? .standard
