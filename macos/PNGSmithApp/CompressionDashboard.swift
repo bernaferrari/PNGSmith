@@ -171,9 +171,7 @@ struct CompressionDashboard: View {
             if before != after { refreshPreviews() }
         }
         .onChange(of: protectExistingPalette) { _, _ in
-            saveSummary = nil
-            automaticColorBudgets.removeAll()
-            refreshPreviews()
+            refreshPreviewsForPaletteProtectionChange()
         }
     }
 

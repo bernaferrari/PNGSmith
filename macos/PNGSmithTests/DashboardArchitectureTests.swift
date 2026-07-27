@@ -79,6 +79,37 @@ final class DashboardArchitectureTests: XCTestCase {
         XCTAssertEqual(item.supportedMode(requested: .shrink), .shrink)
     }
 
+    func testPaletteProtectionOnlyInvalidatesAutomaticLowColorImages() {
+        XCTAssertTrue(PaletteProtectionPolicy.canAffect(
+            reduceColors: true,
+            autoColors: true,
+            mode: .shrink,
+            sourceColors: 128,
+            sourceColorsAtLeast: nil
+        ))
+        XCTAssertFalse(PaletteProtectionPolicy.canAffect(
+            reduceColors: true,
+            autoColors: true,
+            mode: .shrink,
+            sourceColors: nil,
+            sourceColorsAtLeast: 257
+        ))
+        XCTAssertFalse(PaletteProtectionPolicy.canAffect(
+            reduceColors: true,
+            autoColors: false,
+            mode: .shrink,
+            sourceColors: 128,
+            sourceColorsAtLeast: nil
+        ))
+        XCTAssertFalse(PaletteProtectionPolicy.canAffect(
+            reduceColors: true,
+            autoColors: true,
+            mode: .auto,
+            sourceColors: 128,
+            sourceColorsAtLeast: nil
+        ))
+    }
+
     func testSaveSummarySeparatesWrittenSkippedAndFailedResults() {
         let summary = SaveSummary(results: [
             result(written: true, original: 100, output: 60, error: nil),

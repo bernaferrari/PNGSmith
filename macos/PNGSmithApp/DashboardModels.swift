@@ -157,6 +157,22 @@ enum DashboardWorkspaceMode: Equatable, Sendable {
     case batch
 }
 
+enum PaletteProtectionPolicy {
+    static func canAffect(
+        reduceColors: Bool,
+        autoColors: Bool,
+        mode: DashboardMode,
+        sourceColors: Int?,
+        sourceColorsAtLeast: Int?
+    ) -> Bool {
+        guard reduceColors, autoColors, mode == .shrink else { return false }
+        if let sourceColors {
+            return sourceColors <= 256
+        }
+        return sourceColorsAtLeast == nil
+    }
+}
+
 enum CropToolState: Equatable, Sendable {
     case inactive
     case presented(URL)

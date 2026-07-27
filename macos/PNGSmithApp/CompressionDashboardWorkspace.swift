@@ -333,22 +333,33 @@ extension CompressionDashboard {
             }
         } label: {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 1) {
+                if paletteProtectionApplied(to: item, outcome: outcome) {
                     batchReviewThumbnail(
                         url: outcome?.comparisonSourceURL ?? item.url,
                         sourceSize: sourceSize,
-                        title: "Before"
+                        title: "Palette protected",
+                        titleIcon: "checkmark.shield.fill"
                     )
-                    batchReviewThumbnail(
-                        url: outcome?.outputURL,
-                        sourceSize: sourceSize,
-                        title: "After",
-                        isLoading: phase?.isInitialLoading == true,
-                        failed: phase?.failureMessage != nil
-                    )
+                    .frame(height: 190)
+                    .background { WorkspaceImageStage() }
+                } else {
+                    HStack(spacing: 1) {
+                        batchReviewThumbnail(
+                            url: outcome?.comparisonSourceURL ?? item.url,
+                            sourceSize: sourceSize,
+                            title: "Before"
+                        )
+                        batchReviewThumbnail(
+                            url: outcome?.outputURL,
+                            sourceSize: sourceSize,
+                            title: "After",
+                            isLoading: phase?.isInitialLoading == true,
+                            failed: phase?.failureMessage != nil
+                        )
+                    }
+                    .frame(height: 190)
+                    .background { WorkspaceImageStage() }
                 }
-                .frame(height: 190)
-                .background { WorkspaceImageStage() }
 
                 HStack(spacing: 10) {
                     WorkspaceThumbnailImage(url: item.url)
@@ -361,7 +372,9 @@ extension CompressionDashboard {
                             .truncationMode(.middle)
                         Text(batchCardDetail(item: item, phase: phase))
                             .font(.caption.monospacedDigit())
-                            .foregroundStyle(outcome?.savedBytes ?? 0 > 0 ? Color.green : Color.secondary)
+                            .foregroundStyle(
+                                outcome?.savedBytes ?? 0 > 0 ? Color.green : Color.secondary
+                            )
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
@@ -395,6 +408,7 @@ extension CompressionDashboard {
         url: URL?,
         sourceSize: CGSize,
         title: String,
+        titleIcon: String? = nil,
         isLoading: Bool = false,
         failed: Bool = false
     ) -> some View {
@@ -417,7 +431,13 @@ extension CompressionDashboard {
                 }
                 VStack {
                     HStack {
-                        Text(title)
+                        HStack(spacing: 5) {
+                            if let titleIcon {
+                                Image(systemName: titleIcon)
+                                    .foregroundStyle(Color.green)
+                            }
+                            Text(title)
+                        }
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 7)
                             .padding(.vertical, 4)
@@ -434,15 +454,23 @@ extension CompressionDashboard {
     func batchCardDetail(item: WorkItem, phase: PreviewPhase?) -> String {
         switch phase {
         case .ready(let outcome):
-            if outcome.savedBytes == 0 {
-                return "\(Self.byteText(outcome.outputBytes)) · Same size"
-            }
-            return "\(Self.byteText(item.originalBytes)) → \(Self.byteText(outcome.outputBytes)) (\(percentText(outcome)))"
+            return batchCardDetail(item: item, outcome: outcome)
         case .failed:
             return "Preview unavailable"
-        case .loading, nil:
+        case .loading(let previous):
+            return previous.map { batchCardDetail(item: item, outcome: $0) } ?? "Optimizing…"
+        case nil:
             return "Optimizing…"
         }
+    }
+
+    func batchCardDetail(item: WorkItem, outcome: PreviewOutcome) -> String {
+        if outcome.savedBytes <= 0 {
+            return paletteProtectionApplied(to: item, outcome: outcome)
+                ? "Already optimized"
+                : "\(Self.byteText(outcome.outputBytes)) · No savings"
+        }
+        return "\(Self.byteText(item.originalBytes)) → \(Self.byteText(outcome.outputBytes)) (\(percentText(outcome)))"
     }
 
     func closeCropEditor() {

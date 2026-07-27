@@ -108,6 +108,44 @@ extension CompressionDashboard {
         schedulePreviews(for: ordered, generation: generation)
     }
 
+    func refreshPreviewsForPaletteProtectionChange() {
+        let affectedURLs = items.compactMap { item -> URL? in
+            let phase = previews[item.url]
+            if case .loading = phase { return item.url }
+            let outcome = phase?.lastKnownOutcome
+            return paletteProtectionCanAffect(item, outcome: outcome) ? item.url : nil
+        }
+        guard !affectedURLs.isEmpty else {
+            saveSummary = nil
+            return
+        }
+
+        showingOriginal = false
+        saveSummary = nil
+        generation += 1
+        for url in affectedURLs {
+            automaticColorBudgets[url] = nil
+        }
+        schedulePreviews(for: affectedURLs, generation: generation)
+    }
+
+    func paletteProtectionCanAffect(_ item: WorkItem, outcome: PreviewOutcome?) -> Bool {
+        let optimization = optimization(for: item)
+        return PaletteProtectionPolicy.canAffect(
+            reduceColors: optimization.reduceColors,
+            autoColors: optimization.autoColors,
+            mode: item.supportedMode(requested: optimization.mode),
+            sourceColors: outcome?.sourceColors,
+            sourceColorsAtLeast: outcome?.sourceColorsAtLeast
+        )
+    }
+
+    func paletteProtectionApplied(to item: WorkItem, outcome: PreviewOutcome?) -> Bool {
+        protectExistingPalette
+            && outcome?.sourceColors.map { $0 <= 256 } == true
+            && paletteProtectionCanAffect(item, outcome: outcome)
+    }
+
     private func schedulePreviews(for ordered: [URL], generation currentGeneration: Int) {
         let settings = store.settings
         let defaults = defaultOptimizationSettings
