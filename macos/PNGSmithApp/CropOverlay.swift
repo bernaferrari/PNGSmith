@@ -188,7 +188,7 @@ extension CropEditorWorkspace {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.24), radius: 8, y: 3)
+        .shadow(color: .black.opacity(0.10), radius: 5, y: 2)
     }
 
     private func adjustViewZoom(by amount: CGFloat) {
