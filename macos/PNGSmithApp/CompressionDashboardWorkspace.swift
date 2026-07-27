@@ -465,10 +465,15 @@ extension CompressionDashboard {
     }
 
     func batchCardDetail(item: WorkItem, outcome: PreviewOutcome) -> String {
+        if paletteProtectionApplied(to: item, outcome: outcome) {
+            guard outcome.savedBytes > 0 else {
+                return "\(Self.byteText(outcome.outputBytes)) · Already optimized"
+            }
+            let percent = Int((outcome.savedFraction * 100).rounded())
+            return "\(Self.byteText(outcome.outputBytes)) · \(percent)% smaller"
+        }
         if outcome.savedBytes <= 0 {
-            return paletteProtectionApplied(to: item, outcome: outcome)
-                ? "Already optimized"
-                : "\(Self.byteText(outcome.outputBytes)) · No savings"
+            return "\(Self.byteText(outcome.outputBytes)) · No savings"
         }
         return "\(Self.byteText(item.originalBytes)) → \(Self.byteText(outcome.outputBytes)) (\(percentText(outcome)))"
     }
