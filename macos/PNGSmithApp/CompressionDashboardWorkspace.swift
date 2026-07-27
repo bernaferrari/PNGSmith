@@ -189,6 +189,16 @@ extension CompressionDashboard {
         if status.pendingCount > 0 {
             return "Preparing \(status.pendingCount) preview\(status.pendingCount == 1 ? "" : "s")…"
         }
+        let pastedCount = items.count(where: \.isClipboardItem)
+        if pastedCount > 0 {
+            let fileCount = items.count - pastedCount
+            if fileCount == 0 {
+                return pastedCount == 1
+                    ? "Open the pasted image to export it"
+                    : "Open pasted images to export them"
+            }
+            return "\(fileCount) file\(fileCount == 1 ? "" : "s") ready · \(pastedCount) pasted separately"
+        }
         return "All previews are ready"
     }
 
@@ -557,7 +567,7 @@ extension CompressionDashboard {
             VStack(spacing: 8) {
                 Text(isDropTargeted ? "Drop to start" : "Make PNGs lighter")
                     .font(.system(size: 26, weight: .semibold))
-                Text("Drop one or more images to preview the exact result\nbefore PNGSmith writes a single byte.")
+                Text("Drop PNGs here, or paste an image with Command-V.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -832,7 +842,7 @@ extension CompressionDashboard {
     }
 
     var activeSaveItems: [WorkItem] {
-        if workspaceMode == .batch { return items }
+        if workspaceMode == .batch { return items.filter { !$0.isClipboardItem } }
         return selectedItem.map { [$0] } ?? []
     }
 

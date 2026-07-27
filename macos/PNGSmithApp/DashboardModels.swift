@@ -1,5 +1,10 @@
 import Foundation
 
+enum WorkItemOrigin: Equatable, Sendable {
+    case file
+    case clipboard
+}
+
 struct WorkItem: Identifiable, Equatable, Sendable {
     var id: URL { url }
     let url: URL
@@ -8,8 +13,28 @@ struct WorkItem: Identifiable, Equatable, Sendable {
     let pixelWidth: Int
     let pixelHeight: Int
     let frameCount: Int
+    let origin: WorkItemOrigin
+
+    init(
+        url: URL,
+        securityScoped: Bool,
+        originalBytes: UInt64,
+        pixelWidth: Int,
+        pixelHeight: Int,
+        frameCount: Int,
+        origin: WorkItemOrigin = .file
+    ) {
+        self.url = url
+        self.securityScoped = securityScoped
+        self.originalBytes = originalBytes
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+        self.frameCount = frameCount
+        self.origin = origin
+    }
 
     var isAnimated: Bool { frameCount > 1 }
+    var isClipboardItem: Bool { origin == .clipboard }
 
     func supportedMode(requested: DashboardMode) -> DashboardMode {
         isAnimated ? .auto : requested
@@ -132,6 +157,7 @@ enum SaveDestination: Equatable {
     case copies
     case replace
     case saveAs
+    case clipboard
 }
 
 enum ComparisonLayout: String, CaseIterable, Identifiable, Sendable {

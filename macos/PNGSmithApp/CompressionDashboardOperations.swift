@@ -301,6 +301,70 @@ extension CompressionDashboard {
         return addedAny
     }
 
+    func pasteImageFromClipboard() {
+        let pasteboard = NSPasteboard.general
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        let fileURLs = (pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: options
+        ) as? [URL] ?? []).filter {
+            $0.pathExtension.caseInsensitiveCompare("png") == .orderedSame
+        }
+        if !fileURLs.isEmpty {
+            _ = add(fileURLs)
+            return
+        }
+
+        guard let data = Self.pngData(from: pasteboard) else {
+            errorMessage = "The clipboard does not contain an image."
+            return
+        }
+
+        do {
+            let fileManager = FileManager.default
+            let directory = fileManager.temporaryDirectory
+                .appendingPathComponent("PNGSmith-Paste-\(UUID().uuidString)", isDirectory: true)
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            let pastedCount = items.count(where: \.isClipboardItem) + 1
+            let filename = pastedCount == 1 ? "Pasted Image.png" : "Pasted Image \(pastedCount).png"
+            let url = directory.appendingPathComponent(filename)
+            try data.write(to: url, options: .atomic)
+
+            let properties = Self.imageProperties(at: url)
+            let item = WorkItem(
+                url: url,
+                securityScoped: false,
+                originalBytes: UInt64(data.count),
+                pixelWidth: properties.width,
+                pixelHeight: properties.height,
+                frameCount: properties.frameCount,
+                origin: .clipboard
+            )
+            items.append(item)
+            imageOptimizations[url] = defaultOptimizationSettings
+            selectedURL = url
+            workspaceMode = .image
+            saveAsSelected = false
+            saveSummary = nil
+            errorMessage = nil
+            rememberOpenSession()
+            refreshPreviews(for: [url])
+        } catch {
+            errorMessage = "PNGSmith could not read that clipboard image: \(error.localizedDescription)"
+        }
+    }
+
+    nonisolated static func pngData(from pasteboard: NSPasteboard) -> Data? {
+        if let data = pasteboard.data(forType: .png), !data.isEmpty {
+            return data
+        }
+        guard let image = NSImage(pasteboard: pasteboard),
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff)
+        else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
     func remove(_ url: URL) {
         let nextSelection = DocumentTabNavigation.selection(
             afterRemoving: url,
@@ -310,8 +374,13 @@ extension CompressionDashboard {
         if cropToolState.itemURL == url {
             cropToolState.close()
         }
-        if let item = items.first(where: { $0.url == url }), item.securityScoped {
-            url.stopAccessingSecurityScopedResource()
+        if let item = items.first(where: { $0.url == url }) {
+            if item.securityScoped {
+                url.stopAccessingSecurityScopedResource()
+            }
+            if item.isClipboardItem {
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
         }
         items.removeAll { $0.url == url }
         previews[url] = nil
@@ -372,6 +441,9 @@ extension CompressionDashboard {
         if previousItem.securityScoped {
             currentURL.stopAccessingSecurityScopedResource()
         }
+        if previousItem.isClipboardItem {
+            try? FileManager.default.removeItem(at: currentURL.deletingLastPathComponent())
+        }
 
         items[index] = WorkItem(
             url: replacementURL,
@@ -414,6 +486,9 @@ extension CompressionDashboard {
             item.url.stopAccessingSecurityScopedResource()
         }
         let urls = items.map(\.url)
+        for item in items where item.isClipboardItem {
+            try? FileManager.default.removeItem(at: item.url.deletingLastPathComponent())
+        }
         items.removeAll()
         previews.removeAll()
         automaticColorBudgets.removeAll()
@@ -460,7 +535,8 @@ extension CompressionDashboard {
            let existing = try? JSONDecoder().decode([String: ImageOptimizationSettings].self, from: data) {
             values = existing
         }
-        for (url, optimization) in imageOptimizations {
+        let persistentURLs = Set(items.lazy.filter { !$0.isClipboardItem }.map { $0.url })
+        for (url, optimization) in imageOptimizations where persistentURLs.contains(url) {
             values[url.standardizedFileURL.path] = optimization
         }
         if let data = try? JSONEncoder().encode(values) {
@@ -469,11 +545,12 @@ extension CompressionDashboard {
     }
 
     func rememberOpenSession() {
-        guard !items.isEmpty else {
+        let persistentItems = items.filter { !$0.isClipboardItem }
+        guard !persistentItems.isEmpty else {
             forgetOpenSession()
             return
         }
-        let bookmarks = items.compactMap { item in
+        let bookmarks = persistentItems.compactMap { item in
             try? item.url.bookmarkData(
                 options: .withSecurityScope,
                 includingResourceValuesForKeys: nil,
@@ -481,7 +558,10 @@ extension CompressionDashboard {
             )
         }
         appDefaults.set(bookmarks, forKey: Self.openImageBookmarksKey)
-        appDefaults.set(selectedURL?.path, forKey: Self.selectedOpenImagePathKey)
+        let persistentSelection = selectedURL.flatMap { selected in
+            persistentItems.first(where: { $0.url == selected })?.url.path
+        }
+        appDefaults.set(persistentSelection, forKey: Self.selectedOpenImagePathKey)
         appDefaults.removeObject(forKey: Self.lastImageBookmarkKey)
     }
 
@@ -534,6 +614,10 @@ extension CompressionDashboard {
 
     func save() {
         guard !isSaving, activePreviewStatus.canSave else { return }
+        if saveDestination == .clipboard {
+            copyPreviewToClipboard()
+            return
+        }
         if saveDestination == .saveAs {
             saveAs()
             return
@@ -574,7 +658,9 @@ extension CompressionDashboard {
         panel.allowedContentTypes = [.png]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
-        panel.directoryURL = item.url.deletingLastPathComponent()
+        if !item.isClipboardItem {
+            panel.directoryURL = item.url.deletingLastPathComponent()
+        }
         panel.nameFieldStringValue = item.url.deletingPathExtension().lastPathComponent
             + store.settings.suffix
             + ".png"
@@ -588,6 +674,50 @@ extension CompressionDashboard {
             panel.beginSheetModal(for: window, completionHandler: completion)
         } else {
             panel.begin(completionHandler: completion)
+        }
+    }
+
+    func copyPreviewToClipboard() {
+        guard !isSaving,
+              activeSaveItems.count == 1,
+              let item = activeSaveItems.first,
+              let outcome = previews[item.url]?.readyOutcome
+        else { return }
+
+        saveConfirmationTask?.cancel()
+        isSaving = true
+        saveSummary = nil
+        errorMessage = nil
+
+        do {
+            let data = try Data(contentsOf: outcome.outputURL)
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            guard pasteboard.setData(data, forType: .png) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            let result = PNGSmithResult(
+                input: item.url.path,
+                output: "clipboard",
+                originalBytes: outcome.originalBytes,
+                outputBytes: outcome.outputBytes,
+                actualMode: outcome.actualMode,
+                paletteEntries: outcome.paletteEntries,
+                colorBudget: outcome.colorBudget,
+                sourceColors: outcome.sourceColors,
+                sourceColorsAtLeast: outcome.sourceColorsAtLeast,
+                pixelIdentical: !outcome.lossy,
+                lossy: outcome.lossy,
+                written: true,
+                skippedReason: nil,
+                error: nil
+            )
+            isSaving = false
+            saveSummary = SaveSummary(results: [result])
+            scheduleSaveConfirmationReset()
+        } catch {
+            isSaving = false
+            errorMessage = "PNGSmith could not copy that image: \(error.localizedDescription)"
         }
     }
 
@@ -720,7 +850,8 @@ extension CompressionDashboard {
                 originalBytes: bytes,
                 pixelWidth: properties.width,
                 pixelHeight: properties.height,
-                frameCount: properties.frameCount
+                frameCount: properties.frameCount,
+                origin: item.origin
             )
         }
         Task {

@@ -79,6 +79,29 @@ final class DashboardArchitectureTests: XCTestCase {
         XCTAssertEqual(item.supportedMode(requested: .shrink), .shrink)
     }
 
+    func testWorkItemsDistinguishFilesFromTemporaryClipboardImages() {
+        let file = WorkItem(
+            url: URL(fileURLWithPath: "/tmp/file.png"),
+            securityScoped: false,
+            originalBytes: 100,
+            pixelWidth: 10,
+            pixelHeight: 10,
+            frameCount: 1
+        )
+        let pasted = WorkItem(
+            url: URL(fileURLWithPath: "/tmp/Pasted Image.png"),
+            securityScoped: false,
+            originalBytes: 100,
+            pixelWidth: 10,
+            pixelHeight: 10,
+            frameCount: 1,
+            origin: .clipboard
+        )
+
+        XCTAssertFalse(file.isClipboardItem)
+        XCTAssertTrue(pasted.isClipboardItem)
+    }
+
     func testPaletteProtectionOnlyInvalidatesAutomaticLowColorImages() {
         XCTAssertTrue(PaletteProtectionPolicy.canAffect(
             reduceColors: true,

@@ -152,6 +152,9 @@ struct CompressionDashboard: View {
         } isTargeted: { targeted in
             isDropTargeted = targeted
         }
+        .onPasteCommand(of: [.png, .image]) { _ in
+            pasteImageFromClipboard()
+        }
         .onOpenURL { url in
             add([url])
         }
@@ -380,9 +383,11 @@ extension CompressionDashboard {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
             Button("Close") { remove(item.url) }
-            Divider()
-            Button("Reveal in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([item.url])
+            if !item.isClipboardItem {
+                Divider()
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([item.url])
+                }
             }
         }
     }
