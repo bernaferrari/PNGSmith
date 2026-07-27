@@ -203,16 +203,13 @@ struct CropEditorWorkspace: View {
                     .keyboardShortcut(.defaultAction)
             }
             .padding(14)
-            .background(.bar)
+            .background(WorkspaceSurface.inspector)
             .overlay(alignment: .top) { Divider() }
             .opacity(workspacePresented ? 1 : 0)
             .offset(y: workspacePresented ? 0 : 16)
             .scaleEffect(workspacePresented ? 1 : 0.98, anchor: .bottom)
         }
-        .background(
-            Color(nsColor: .underPageBackgroundColor)
-                .opacity(workspacePresented ? 0.5 : 0)
-        )
+        .background(WorkspaceSurface.inspector.opacity(workspacePresented ? 1 : 0))
         .animation(chromeAnimation, value: workspacePresented)
         .frame(width: 330)
     }

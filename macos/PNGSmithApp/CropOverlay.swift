@@ -43,7 +43,7 @@ extension CropEditorWorkspace {
         let frame = CropGeometry.canvasRect(canvas, in: base)
         let editingBounds = allowOutsideImage ? workspace : base
         return ZStack {
-            Color(nsColor: .underPageBackgroundColor)
+            WorkspaceImageStage()
                 .opacity(surfaceDimmed ? 1 : 0)
 
             imageSurface(frame: base)

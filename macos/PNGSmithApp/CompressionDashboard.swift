@@ -82,6 +82,8 @@ struct CompressionDashboard: View {
         }
         .navigationTitle("PNGSmith")
         .toolbar { toolbarContent }
+        .toolbarBackground(WorkspaceSurface.chrome, for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(minWidth: 900, minHeight: 640)
         .focusedSceneValue(
@@ -215,10 +217,8 @@ extension CompressionDashboard {
                 proxy.scrollTo(url, anchor: .center)
             }
         }
-        .background(.bar)
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(WorkspaceSurface.chrome)
     }
 
     var batchOverviewTab: some View {
@@ -507,7 +507,7 @@ extension CompressionDashboard {
                 && (comparisonLayout != .hold || !showingOriginal)
 
             ZStack {
-                Color(nsColor: .underPageBackgroundColor)
+                WorkspaceImageStage()
 
                 if item != nil {
                     WorkspaceImageBackdrop(frame: afterImageFrame)

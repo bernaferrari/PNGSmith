@@ -35,6 +35,12 @@ extension CompressionDashboard {
                 if items.count > 1 {
                     documentTabBar
                         .frame(height: WorkspaceMetrics.documentTabBarHeight)
+                        .overlay(alignment: .bottom) {
+                            Rectangle()
+                                .fill(Color(nsColor: .separatorColor))
+                                .frame(height: 1)
+                                .allowsHitTesting(false)
+                        }
                         .opacity(cropToolState.showsChrome ? 0.62 : 1)
                         .allowsHitTesting(!cropToolState.isActive)
                         .animation(toolChromeAnimation, value: cropToolState.showsChrome)
@@ -73,31 +79,32 @@ extension CompressionDashboard {
         }
     }
 
-    @ViewBuilder
     var activeWorkspace: some View {
-        if workspaceMode == .batch, items.count > 1 {
-            batchReviewWorkspace
-                .transition(workspaceModeTransition)
-        } else {
-            dashboardWorkspace
-                .transition(workspaceModeTransition)
-        }
-    }
+        let showsBatch = workspaceMode == .batch && items.count > 1
+        return HStack(spacing: 0) {
+            ZStack {
+                if showsBatch {
+                    batchReviewMainArea
+                        .transition(workspaceModeTransition)
+                } else {
+                    mainArea
+                        .transition(workspaceModeTransition)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-    var dashboardWorkspace: some View {
-        HStack(spacing: 0) {
-            mainArea
             Divider()
-            sidebar
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 
-    var batchReviewWorkspace: some View {
-        HStack(spacing: 0) {
-            batchReviewMainArea
-            Divider()
-            batchReviewSidebar
+            ZStack {
+                if showsBatch {
+                    batchReviewSidebar
+                        .transition(workspaceModeTransition)
+                } else {
+                    sidebar
+                        .transition(workspaceModeTransition)
+                }
+            }
+            .frame(width: 330)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -170,7 +177,7 @@ extension CompressionDashboard {
             Spacer()
             sidebarFooter
         }
-        .background(Color(nsColor: .underPageBackgroundColor).opacity(0.5))
+        .background(WorkspaceSurface.inspector)
         .frame(width: 330)
     }
 
@@ -341,7 +348,7 @@ extension CompressionDashboard {
                     )
                 }
                 .frame(height: 190)
-                .background(Color(nsColor: .underPageBackgroundColor))
+                .background { WorkspaceImageStage() }
 
                 HStack(spacing: 10) {
                     WorkspaceThumbnailImage(url: item.url)
@@ -399,7 +406,6 @@ extension CompressionDashboard {
                 marginScale: 0.08
             )
             ZStack {
-                Color(nsColor: .underPageBackgroundColor)
                 if url != nil { WorkspaceImageBackdrop(frame: frame) }
                 if let url {
                     WorkspaceFileImage(url: url, frame: frame)
@@ -500,7 +506,7 @@ extension CompressionDashboard {
                     .animation(toolChromeAnimation, value: cropChromeActive)
             }
         }
-        .background(Color(nsColor: .underPageBackgroundColor).opacity(0.5))
+        .background(WorkspaceSurface.inspector)
         .frame(width: 330)
     }
 

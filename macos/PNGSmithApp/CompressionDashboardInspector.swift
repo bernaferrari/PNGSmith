@@ -256,7 +256,7 @@ extension CompressionDashboard {
             .help("\(saveButtonTitle) (Command-S)")
         }
         .padding(14)
-        .background(.bar)
+        .background(WorkspaceSurface.inspector)
         .overlay(alignment: .top) { Divider() }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: saveSummary)
     }

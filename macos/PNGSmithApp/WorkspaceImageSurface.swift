@@ -5,6 +5,19 @@ enum WorkspaceMetrics {
     static let documentTabBarHeight: CGFloat = 42
 }
 
+enum WorkspaceSurface {
+    static let chrome = Color(nsColor: .windowBackgroundColor)
+    static let inspector = Color(nsColor: .windowBackgroundColor)
+}
+
+struct WorkspaceImageStage: View {
+    var body: some View {
+        Color(nsColor: .windowBackgroundColor)
+            .overlay(Color.primary.opacity(0.035))
+            .allowsHitTesting(false)
+    }
+}
+
 private final class WorkspaceImageCache: @unchecked Sendable {
     static let shared = WorkspaceImageCache()
 
@@ -88,7 +101,7 @@ struct WorkspaceImageBackdrop: View {
             .overlay {
                 Rectangle()
                     .strokeBorder(
-                        Color(nsColor: .separatorColor).opacity(0.75),
+                        Color(nsColor: .separatorColor),
                         lineWidth: 1 / max(viewScale, 1)
                     )
             }
