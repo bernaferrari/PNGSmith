@@ -16,7 +16,7 @@ PNGSmith compresses PNG files on macOS. Drop in an image or a folder, compare th
 Compression runs locally, and metadata is preserved by default.
 
 <p align="center">
-  <img src="docs/assets/compression-preview-dark.png" alt="PNGSmith compressing a PNG in dark mode" width="1000">
+  <img src="docs/assets/demo.webp" alt="PNGSmith comparison and color reduction workflow" width="1000">
 </p>
 
 ## Features
@@ -43,6 +43,10 @@ Compression runs locally, and metadata is preserved by default.
 | **Balanced** | Carefully combines similar colors | Most web images |
 | **Smaller** | Reduces colors more aggressively | Images where file size matters most |
 | **Manual** | Uses a color limit from 2 to 256 | Precise palette control |
+
+<p align="center">
+  <img src="docs/assets/compression-preview-dark.png" alt="PNGSmith compressing a PNG in dark mode" width="1000">
+</p>
 
 ## Installation
 
