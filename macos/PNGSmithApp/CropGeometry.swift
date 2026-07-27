@@ -1,6 +1,10 @@
 import CoreGraphics
 
 enum CropGeometry {
+    static let edgeHitThickness: CGFloat = 24
+    static let cornerHitSize: CGFloat = 32
+    static let moveHitInset: CGFloat = edgeHitThickness / 2
+
     static func extendsOutsideImage(_ crop: NormalizedCrop) -> Bool {
         let tolerance = 0.000_1
         return crop.x < -tolerance
@@ -84,11 +88,11 @@ enum CropGeometry {
     static func hitSize(for handle: CropHandle, frame: CGRect) -> CGSize {
         switch handle {
         case .topLeading, .topTrailing, .bottomLeading, .bottomTrailing:
-            CGSize(width: 24, height: 24)
+            CGSize(width: cornerHitSize, height: cornerHitSize)
         case .top, .bottom:
-            CGSize(width: frame.width, height: 16)
+            CGSize(width: frame.width, height: edgeHitThickness)
         case .leading, .trailing:
-            CGSize(width: 16, height: frame.height)
+            CGSize(width: edgeHitThickness, height: frame.height)
         }
     }
 

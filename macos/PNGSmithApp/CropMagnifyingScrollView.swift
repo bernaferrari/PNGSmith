@@ -3,16 +3,13 @@ import SwiftUI
 
 struct NativeMagnifyingScrollView<Content: View>: NSViewRepresentable {
     @Binding var magnification: CGFloat
-    let panOffset: CGSize
     private let content: Content
 
     init(
         magnification: Binding<CGFloat>,
-        panOffset: CGSize,
         @ViewBuilder content: () -> Content
     ) {
         _magnification = magnification
-        self.panOffset = panOffset
         self.content = content()
     }
 
@@ -47,12 +44,6 @@ struct NativeMagnifyingScrollView<Content: View>: NSViewRepresentable {
         context.coordinator.hostingView?.rootView = content
         scrollView.updateDocumentSize()
         scrollView.setMagnificationIfNeeded(magnification)
-        let panDelta = CGSize(
-            width: panOffset.width - context.coordinator.lastPanOffset.width,
-            height: panOffset.height - context.coordinator.lastPanOffset.height
-        )
-        context.coordinator.lastPanOffset = panOffset
-        scrollView.panContent(by: panDelta)
     }
 
     static func dismantleNSView(_ scrollView: CropMagnifyingScrollView<Content>, coordinator: Coordinator) {
@@ -62,7 +53,6 @@ struct NativeMagnifyingScrollView<Content: View>: NSViewRepresentable {
     @MainActor
     final class Coordinator {
         var magnification: Binding<CGFloat>
-        var lastPanOffset = CGSize.zero
         weak var hostingView: ArrowHostingView<Content>?
 
         init(magnification: Binding<CGFloat>) {
@@ -138,22 +128,6 @@ final class CropMagnifyingScrollView<Content: View>: NSScrollView {
         setMagnification(target, centeredAt: center)
     }
 
-    func panContent(by translation: CGSize) {
-        guard magnification > 1.001,
-              abs(translation.width) > 0.001 || abs(translation.height) > 0.001
-        else { return }
-
-        let visible = documentVisibleRect
-        let documentBounds = hostingView.bounds
-        let maximumX = max(documentBounds.maxX - visible.width, documentBounds.minX)
-        let maximumY = max(documentBounds.maxY - visible.height, documentBounds.minY)
-        let origin = CGPoint(
-            x: min(max(visible.minX - translation.width, documentBounds.minX), maximumX),
-            y: min(max(visible.minY - translation.height, documentBounds.minY), maximumY)
-        )
-        contentView.scroll(to: origin)
-        reflectScrolledClipView(contentView)
-    }
 }
 
 final class ArrowHostingView<Content: View>: NSHostingView<Content> {

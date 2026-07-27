@@ -7,8 +7,7 @@ extension CropEditorWorkspace {
         GeometryReader { proxy in
             ZStack {
                 NativeMagnifyingScrollView(
-                    magnification: $viewZoom,
-                    panOffset: viewportPan
+                    magnification: $viewZoom
                 ) {
                     cropStage(size: proxy.size)
                 }
@@ -71,21 +70,20 @@ extension CropEditorWorkspace {
             Rectangle()
                 .fill(.clear)
                 .contentShape(Rectangle())
-                .gesture(viewportPanGesture)
-                .allowsHitTesting(workspacePresented && viewZoom > 1)
-
-            Rectangle()
-                .fill(.clear)
-                .contentShape(Rectangle())
-                .frame(width: frame.width, height: frame.height)
+                // Keep the move target away from the resize regions so a drag
+                // near an edge can never be claimed as a crop move.
+                .frame(
+                    width: max(frame.width - CropGeometry.moveHitInset * 2, 1),
+                    height: max(frame.height - CropGeometry.moveHitInset * 2, 1)
+                )
                 .position(x: frame.midX, y: frame.midY)
                 .gesture(canvasMoveGesture(base: base, workspace: editingBounds))
-                .allowsHitTesting(workspacePresented && viewZoom <= 1.001)
+                .allowsHitTesting(workspacePresented)
 
             ForEach(CropHandle.edges, id: \.self) { handle in
                 handleView(handle, frame: frame, base: base, workspace: editingBounds)
                     .opacity(cropFramePresented ? 1 : 0)
-                    .allowsHitTesting(cropFramePresented && viewZoom <= 1.001)
+                    .allowsHitTesting(cropFramePresented)
             }
 
             // Corners sit above the edge hit regions so diagonal resizing wins
@@ -93,7 +91,7 @@ extension CropEditorWorkspace {
             ForEach(CropHandle.corners, id: \.self) { handle in
                 handleView(handle, frame: frame, base: base, workspace: editingBounds)
                     .opacity(cropFramePresented ? 1 : 0)
-                    .allowsHitTesting(cropFramePresented && viewZoom <= 1.001)
+                    .allowsHitTesting(cropFramePresented)
             }
 
         }
@@ -105,10 +103,6 @@ extension CropEditorWorkspace {
             case .active(let location):
                 if let activeHandle {
                     activeHandle.cursor.set()
-                } else if isPanningViewport {
-                    NSCursor.closedHand.set()
-                } else if viewZoom > 1 {
-                    NSCursor.openHand.set()
                 } else if let handle = CropGeometry.handle(at: location, frame: frame) {
                     handle.cursor.set()
                 } else {
@@ -197,32 +191,6 @@ extension CropEditorWorkspace {
 
     private func setViewZoom(_ value: CGFloat) {
         viewZoom = min(max(value, 1), 4)
-    }
-
-    private var viewportPanGesture: some Gesture {
-        DragGesture(minimumDistance: 1, coordinateSpace: .local)
-            .onChanged { value in
-                guard viewZoom > 1 else { return }
-                if viewportPanStart == nil {
-                    viewportPanStart = viewportPan
-                    isPanningViewport = true
-                    NSCursor.closedHand.set()
-                }
-                guard let start = viewportPanStart else { return }
-                viewportPan = CGSize(
-                    width: start.width + value.translation.width,
-                    height: start.height + value.translation.height
-                )
-            }
-            .onEnded { _ in
-                viewportPanStart = nil
-                isPanningViewport = false
-                if viewZoom > 1 {
-                    NSCursor.openHand.set()
-                } else {
-                    NSCursor.arrow.set()
-                }
-            }
     }
 
     var aspectAnimation: Animation? {

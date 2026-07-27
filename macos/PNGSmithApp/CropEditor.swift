@@ -40,9 +40,6 @@ struct CropEditorWorkspace: View {
     @State var handoffProgress: CGFloat = 0
     @State var handoffVisible = true
     @State var viewZoom: CGFloat = 1
-    @State var viewportPan = CGSize.zero
-    @State var viewportPanStart: CGSize?
-    @State var isPanningViewport = false
     @State var isDismissing = false
     @State var presentationTask: Task<Void, Never>?
     @FocusState var geometryField: CropGeometryField?
