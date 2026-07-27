@@ -74,8 +74,4 @@ The app, Finder extensions, Services, Shortcuts action, CLI, and C ABI all use t
 
 ## Development
 
-See the [developer guide](docs/DEVELOPMENT.md) for builds, tests, architecture, the JSON API, and releases. A [GitHub social preview](docs/assets/opengraph-image.jpg) is also included.
-
-## License
-
-[MIT](LICENSE)
+See the [developer guide](docs/DEVELOPMENT.md) for builds, tests, architecture, the JSON API, and releases.
