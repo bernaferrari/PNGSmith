@@ -6,11 +6,10 @@ extension CropEditorWorkspace {
     var editorCanvas: some View {
         GeometryReader { proxy in
             ZStack {
-                NativeMagnifyingScrollView(
-                    magnification: $viewZoom
-                ) {
-                    cropStage(size: proxy.size)
-                }
+                cropStage(size: proxy.size)
+                    .scaleEffect(viewZoom, anchor: .center)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
 
                 zoomControl
                     .opacity(workspacePresented ? 1 : 0)
@@ -73,8 +72,8 @@ extension CropEditorWorkspace {
                 // Keep the move target away from the resize regions so a drag
                 // near an edge can never be claimed as a crop move.
                 .frame(
-                    width: max(frame.width - CropGeometry.moveHitInset * 2, 1),
-                    height: max(frame.height - CropGeometry.moveHitInset * 2, 1)
+                    width: max(frame.width - CropGeometry.edgeHitThickness / viewZoom, 1),
+                    height: max(frame.height - CropGeometry.edgeHitThickness / viewZoom, 1)
                 )
                 .position(x: frame.midX, y: frame.midY)
                 .gesture(canvasMoveGesture(base: base, workspace: editingBounds))
@@ -103,7 +102,11 @@ extension CropEditorWorkspace {
             case .active(let location):
                 if let activeHandle {
                     activeHandle.cursor.set()
-                } else if let handle = CropGeometry.handle(at: location, frame: frame) {
+                } else if let handle = CropGeometry.handle(
+                    at: location,
+                    frame: frame,
+                    viewScale: viewZoom
+                ) {
                     handle.cursor.set()
                 } else {
                     NSCursor.arrow.set()
@@ -258,9 +261,13 @@ extension CropEditorWorkspace {
                     gestureStartEdit = currentEdit
                 }
                 guard let start = moveStart else { return }
+                let translation = CropGeometry.documentTranslation(
+                    value.translation,
+                    viewScale: viewZoom
+                )
                 var proposed = CGRect(
-                    x: start.minX + value.translation.width,
-                    y: start.minY + value.translation.height,
+                    x: start.minX + translation.width,
+                    y: start.minY + translation.height,
                     width: start.width,
                     height: start.height
                 )
@@ -303,8 +310,16 @@ extension CropEditorWorkspace {
     private func handleView(_ handle: CropHandle, frame: CGRect, base: CGRect, workspace: CGRect) -> some View {
         Color.clear
             .frame(
-                width: CropGeometry.hitSize(for: handle, frame: frame).width,
-                height: CropGeometry.hitSize(for: handle, frame: frame).height
+                width: CropGeometry.hitSize(
+                    for: handle,
+                    frame: frame,
+                    viewScale: viewZoom
+                ).width,
+                height: CropGeometry.hitSize(
+                    for: handle,
+                    frame: frame,
+                    viewScale: viewZoom
+                ).height
             )
             .contentShape(Rectangle())
             .position(CropGeometry.point(for: handle, in: frame))
@@ -322,10 +337,14 @@ extension CropEditorWorkspace {
                     gestureStartEdit = currentEdit
                 }
                 guard let start = resizeStart else { return }
+                let translation = CropGeometry.documentTranslation(
+                    value.translation,
+                    viewScale: viewZoom
+                )
                 let resized = resizedRect(
                     start,
                     handle: handle,
-                    translation: value.translation,
+                    translation: translation,
                     imageRect: base,
                     workspace: workspace
                 )

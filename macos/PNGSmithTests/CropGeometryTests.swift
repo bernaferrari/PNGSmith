@@ -38,6 +38,16 @@ final class CropGeometryTests: XCTestCase {
         XCTAssertEqual(roundTrip.height, normalized.height, accuracy: 0.000_001)
     }
 
+    func testZoomedDragTranslationUsesDocumentCoordinates() {
+        let translation = CropGeometry.documentTranslation(
+            CGSize(width: 80, height: -40),
+            viewScale: 2
+        )
+
+        XCTAssertEqual(translation.width, 40)
+        XCTAssertEqual(translation.height, -20)
+    }
+
     func testOutsideImageDetection() {
         XCTAssertFalse(CropGeometry.extendsOutsideImage(.full))
         XCTAssertTrue(CropGeometry.extendsOutsideImage(

@@ -1,9 +1,8 @@
 import CoreGraphics
 
 enum CropGeometry {
-    static let edgeHitThickness: CGFloat = 24
-    static let cornerHitSize: CGFloat = 32
-    static let moveHitInset: CGFloat = edgeHitThickness / 2
+    static let edgeHitThickness: CGFloat = 16
+    static let cornerHitSize: CGFloat = 24
 
     static func extendsOutsideImage(_ crop: NormalizedCrop) -> Bool {
         let tolerance = 0.000_1
@@ -76,6 +75,14 @@ enum CropGeometry {
         )
     }
 
+    static func documentTranslation(_ translation: CGSize, viewScale: CGFloat) -> CGSize {
+        let scale = max(viewScale, 1)
+        return CGSize(
+            width: translation.width / scale,
+            height: translation.height / scale
+        )
+    }
+
     static func nearestSnap(
         candidates: [(offset: CGFloat, guide: CGFloat)],
         threshold: CGFloat
@@ -85,20 +92,31 @@ enum CropGeometry {
             .min { abs($0.offset) < abs($1.offset) }
     }
 
-    static func hitSize(for handle: CropHandle, frame: CGRect) -> CGSize {
-        switch handle {
+    static func hitSize(
+        for handle: CropHandle,
+        frame: CGRect,
+        viewScale: CGFloat = 1
+    ) -> CGSize {
+        let scale = max(viewScale, 1)
+        let edgeThickness = edgeHitThickness / scale
+        let resolvedCornerSize = cornerHitSize / scale
+        return switch handle {
         case .topLeading, .topTrailing, .bottomLeading, .bottomTrailing:
-            CGSize(width: cornerHitSize, height: cornerHitSize)
+            CGSize(width: resolvedCornerSize, height: resolvedCornerSize)
         case .top, .bottom:
-            CGSize(width: frame.width, height: edgeHitThickness)
+            CGSize(width: frame.width, height: edgeThickness)
         case .leading, .trailing:
-            CGSize(width: edgeHitThickness, height: frame.height)
+            CGSize(width: edgeThickness, height: frame.height)
         }
     }
 
-    static func handle(at location: CGPoint, frame: CGRect) -> CropHandle? {
+    static func handle(
+        at location: CGPoint,
+        frame: CGRect,
+        viewScale: CGFloat = 1
+    ) -> CropHandle? {
         for handle in CropHandle.corners + CropHandle.edges {
-            let size = hitSize(for: handle, frame: frame)
+            let size = hitSize(for: handle, frame: frame, viewScale: viewScale)
             let center = point(for: handle, in: frame)
             let hitRect = CGRect(
                 x: center.x - size.width / 2,
