@@ -34,6 +34,8 @@ PNGSmith creates the optimized file before you save it. The preview and reported
 | **Smaller** | Pushes color reduction further | Images where file size matters most |
 | **Manual** | Uses an exact maximum of 2–256 colors | Deliberate palette control |
 
+Balanced and Smaller are repeat-safe by default: once an image fits the automatic palette, later runs keep its colors and use lossless compression only.
+
 Animated PNGs are verified frame by frame. Crop and color reduction stay disabled rather than silently flattening them.
 
 ## At home on macOS

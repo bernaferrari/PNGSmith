@@ -160,6 +160,10 @@ extension CompressionDashboard {
                     if summary.colorReductionEnabled {
                         batchColorCountControl
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                        if summary.preset != .manual {
+                            batchPaletteProtectionControl
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                     }
                 }
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: summary.colorReductionEnabled)
@@ -254,6 +258,36 @@ extension CompressionDashboard {
                 .accessibilityValue("\(summary.manualColorCount ?? 256)")
             }
         }
+    }
+
+    var batchPaletteProtectionControl: some View {
+        let knownOutcomes = items.compactMap { previews[$0.url]?.lastKnownOutcome }
+        let protectedCount = knownOutcomes.count {
+            ($0.sourceColors ?? 257) <= 256
+        }
+        let detail = knownOutcomes.count == items.count && protectedCount > 0
+            ? "\(protectedCount) of \(items.count) already use 256 colors or fewer."
+            : "Keep existing colors when an image uses 256 or fewer."
+
+        return Toggle(isOn: $protectExistingPalette) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundStyle(protectExistingPalette ? Color.green : Color.secondary)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Protect optimized images")
+                        .font(.subheadline.weight(.medium))
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.numericText())
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .toggleStyle(.switch)
+        .help("Prevent repeated automatic color reduction in folder-wide runs")
     }
 
     func setBatchColorReductionEnabled(_ isEnabled: Bool) {

@@ -77,7 +77,10 @@ struct CompressPNGIntent: AppIntent {
             settings.qualityMax = 100
         }
         var request = settings.request(inputs: inputs)
-        request.automatic = AutomaticOptions(strategy: automaticStrategy.rawValue)
+        request.automatic = AutomaticOptions(
+            strategy: automaticStrategy.rawValue,
+            protectExistingPalette: true
+        )
         let response = try PNGSmithCore.execute(request)
         let outputs = response.results.compactMap(\.output).map { path in
             IntentFile(fileURL: URL(fileURLWithPath: path), type: .png)

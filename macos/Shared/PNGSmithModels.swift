@@ -86,6 +86,12 @@ struct PerceptualOptions: Codable, Sendable {
 
 struct AutomaticOptions: Codable, Sendable {
     var strategy: String
+    var protectExistingPalette: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case strategy
+        case protectExistingPalette = "protect_existing_palette"
+    }
 }
 
 struct VerifyOptions: Codable, Sendable {
@@ -107,6 +113,8 @@ struct PNGSmithResult: Codable, Sendable {
     let actualMode: String?
     let paletteEntries: Int?
     let colorBudget: Int?
+    let sourceColors: Int?
+    let sourceColorsAtLeast: Int?
     let pixelIdentical: Bool?
     let lossy: Bool
     let written: Bool
@@ -120,6 +128,8 @@ struct PNGSmithResult: Codable, Sendable {
         case actualMode = "actual_mode"
         case paletteEntries = "palette_entries"
         case colorBudget = "color_budget"
+        case sourceColors = "source_colors"
+        case sourceColorsAtLeast = "source_colors_at_least"
         case pixelIdentical = "pixel_identical"
         case skippedReason = "skipped_reason"
     }
@@ -174,7 +184,7 @@ struct PNGSmithSettings: Codable, Sendable, Equatable {
                 maxDecompressedBytes: 512 * 1024 * 1024
             ),
             perceptual: PerceptualOptions(qualityMin: qualityMin, qualityMax: qualityMax),
-            automatic: AutomaticOptions(strategy: "balanced"),
+            automatic: AutomaticOptions(strategy: "balanced", protectExistingPalette: true),
             verify: VerifyOptions(decodedPixels: verifyPixels)
         )
     }

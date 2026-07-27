@@ -59,7 +59,7 @@ extension CompressionDashboard {
         // replacing it with a dash makes the control appear to reset.
         let outcome = selectedItem.flatMap { previews[$0.url]?.lastKnownOutcome }
         let automaticCount = selectedItem.flatMap { item in
-            automaticColorBudgets[item.url] ?? outcome?.paletteEntries
+            automaticColorBudgets[item.url] ?? outcome?.paletteEntries ?? outcome?.sourceColors
         }
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
@@ -124,7 +124,44 @@ extension CompressionDashboard {
                 .accessibilityValue("\(optimization.maxColors)")
             }
 
+            if optimization.autoColors {
+                paletteProtectionControl(outcome: outcome)
+            }
         }
+    }
+
+    func paletteProtectionControl(outcome: PreviewOutcome?) -> some View {
+        let sourceColors = outcome?.sourceColors
+        let detail: String = if let sourceColors, sourceColors <= 256 {
+            protectExistingPalette
+                ? "\(sourceColors) source colors · lossless only"
+                : "\(sourceColors) source colors · may be reduced again"
+        } else if outcome?.sourceColorsAtLeast != nil {
+            "256+ source colors · first reduction allowed"
+        } else {
+            "Uses lossless compression at 256 colors or fewer."
+        }
+
+        return Toggle(isOn: $protectExistingPalette) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundStyle(protectExistingPalette ? Color.green : Color.secondary)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Protect optimized images")
+                        .font(.subheadline.weight(.medium))
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.numericText())
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .toggleStyle(.switch)
+        .help("Prevent automatic color reduction from changing images that already use 256 colors or fewer")
+        .accessibilityHint("Uses pixel-identical compression for images with an existing palette")
     }
 
     func setMaxColors(_ count: Int, debounced: Bool = true) {

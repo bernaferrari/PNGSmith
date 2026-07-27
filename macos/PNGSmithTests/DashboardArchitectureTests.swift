@@ -111,6 +111,8 @@ final class DashboardArchitectureTests: XCTestCase {
             actualMode: "lossless",
             paletteEntries: nil,
             colorBudget: nil,
+            sourceColors: nil,
+            sourceColorsAtLeast: nil,
             lossy: false,
             neededColors: nil
         )
@@ -286,6 +288,7 @@ final class DashboardArchitectureTests: XCTestCase {
         XCTAssertEqual(request.mode, "automatic_palette")
         XCTAssertEqual(request.maxColors, 256)
         XCTAssertEqual(request.automatic.strategy, "smaller")
+        XCTAssertTrue(request.automatic.protectExistingPalette)
     }
 
     private func result(
@@ -302,6 +305,8 @@ final class DashboardArchitectureTests: XCTestCase {
             actualMode: nil,
             paletteEntries: nil,
             colorBudget: nil,
+            sourceColors: nil,
+            sourceColorsAtLeast: nil,
             pixelIdentical: nil,
             lossy: false,
             written: written,

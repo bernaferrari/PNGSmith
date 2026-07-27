@@ -78,6 +78,10 @@ pub struct FileResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color_budget: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_colors: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_colors_at_least: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pixel_identical: Option<bool>,
     pub lossy: bool,
     pub written: bool,
@@ -92,6 +96,8 @@ struct Candidate {
     mode: &'static str,
     palette_entries: Option<usize>,
     color_budget: Option<u16>,
+    source_colors: Option<usize>,
+    source_colors_at_least: Option<usize>,
     lossy: bool,
     optimized: bool,
 }
@@ -116,6 +122,8 @@ pub fn execute(request: &Request) -> Response {
                 actual_mode: None,
                 palette_entries: None,
                 color_budget: None,
+                source_colors: None,
+                source_colors_at_least: None,
                 pixel_identical: None,
                 lossy: false,
                 written: false,
@@ -209,6 +217,8 @@ fn process_file(input: &Path, request: &Request) -> Result<FileResult, Error> {
         actual_mode: Some(candidate.mode.into()),
         palette_entries: candidate.palette_entries,
         color_budget: candidate.color_budget,
+        source_colors: candidate.source_colors,
+        source_colors_at_least: candidate.source_colors_at_least,
         pixel_identical,
         lossy: candidate.lossy,
         written,
@@ -229,6 +239,8 @@ fn make_candidate(
             mode: "lossless",
             palette_entries: None,
             color_budget: None,
+            source_colors: None,
+            source_colors_at_least: None,
             lossy: false,
             optimized: false,
         }),
@@ -242,6 +254,8 @@ fn make_candidate(
                     mode: "exact_palette",
                     palette_entries: Some(count),
                     color_budget: None,
+                    source_colors: Some(count),
+                    source_colors_at_least: None,
                     lossy: false,
                     optimized: false,
                 }),
@@ -253,6 +267,8 @@ fn make_candidate(
                         mode: "lossless_fallback",
                         palette_entries: None,
                         color_budget: None,
+                        source_colors: None,
+                        source_colors_at_least: None,
                         lossy: false,
                         optimized: false,
                     })
@@ -268,6 +284,8 @@ fn make_candidate(
                     mode: "lossless",
                     palette_entries: None,
                     color_budget: None,
+                    source_colors: None,
+                    source_colors_at_least: None,
                     lossy: false,
                     optimized: true,
                 });
@@ -287,6 +305,8 @@ fn make_candidate(
                             mode: "exact_palette",
                             palette_entries: Some(count),
                             color_budget: None,
+                            source_colors: Some(count),
+                            source_colors_at_least: None,
                             lossy: false,
                             optimized: true,
                         })
@@ -296,6 +316,8 @@ fn make_candidate(
                             mode: "lossless",
                             palette_entries: None,
                             color_budget: None,
+                            source_colors: None,
+                            source_colors_at_least: None,
                             lossy: false,
                             optimized: true,
                         })
@@ -306,6 +328,8 @@ fn make_candidate(
                     mode: "lossless",
                     palette_entries: None,
                     color_budget: None,
+                    source_colors: None,
+                    source_colors_at_least: None,
                     lossy: false,
                     optimized: true,
                 }),
@@ -327,6 +351,8 @@ fn make_candidate(
                 mode: "perceptual",
                 palette_entries: Some(count),
                 color_budget: None,
+                source_colors: None,
+                source_colors_at_least: None,
                 lossy: true,
                 optimized: false,
             })
@@ -334,6 +360,25 @@ fn make_candidate(
         CompressionMode::AutomaticPalette => {
             if document.is_animated() {
                 return animated_palette_fallback(source, request);
+            }
+            let (source_colors, source_colors_at_least) =
+                match exact_palette::encode(source, 256, request.lossless.max_decompressed_bytes) {
+                    Ok((_, count)) => (Some(count), None),
+                    Err(Error::TooManyColors { found_at_least, .. }) => {
+                        (None, Some(found_at_least))
+                    }
+                    Err(Error::ExactPalette(_)) => (None, None),
+                    Err(error) => return Err(error),
+                };
+            if request.automatic.protect_existing_palette
+                && source_colors.is_some_and(|count| count <= usize::from(max))
+            {
+                let mut lossless_request = request.clone();
+                lossless_request.mode = CompressionMode::SmartLossless;
+                let mut candidate = make_candidate(source, &lossless_request, document)?;
+                candidate.source_colors = source_colors;
+                candidate.source_colors_at_least = None;
+                return Ok(candidate);
             }
             let automatic = perceptual::encode_automatic(
                 source,
@@ -346,6 +391,8 @@ fn make_candidate(
                 mode: "automatic_palette",
                 palette_entries: Some(automatic.palette_entries),
                 color_budget: Some(automatic.color_budget),
+                source_colors,
+                source_colors_at_least,
                 lossy: true,
                 optimized: false,
             })
@@ -365,6 +412,8 @@ fn animated_palette_fallback(source: &[u8], request: &Request) -> Result<Candida
         mode: "lossless_fallback",
         palette_entries: None,
         color_budget: None,
+        source_colors: None,
+        source_colors_at_least: None,
         lossy: false,
         optimized: false,
     })
@@ -442,6 +491,29 @@ mod tests {
         encoder.set_depth(png::BitDepth::Eight);
         let pixels: Vec<u8> = (0..=255)
             .flat_map(|value| [value, 255 - value, value / 2, 255])
+            .collect();
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(&pixels)
+            .unwrap();
+        data
+    }
+
+    fn color_count_fixture(color_count: u16) -> Vec<u8> {
+        let mut data = Vec::new();
+        let mut encoder = png::Encoder::new(Cursor::new(&mut data), u32::from(color_count), 1);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let pixels: Vec<u8> = (0..color_count)
+            .flat_map(|value| {
+                [
+                    (value % 256) as u8,
+                    (value / 256) as u8,
+                    (value % 251) as u8,
+                    255,
+                ]
+            })
             .collect();
         encoder
             .write_header()
@@ -611,6 +683,7 @@ mod tests {
             mode: CompressionMode::AutomaticPalette,
             automatic: AutomaticOptions {
                 strategy: AutoColorStrategy::Smaller,
+                protect_existing_palette: false,
             },
             ..Request::default()
         };
@@ -625,6 +698,88 @@ mod tests {
                 .is_some_and(|budget| (2..=256).contains(&budget))
         );
         assert!(result.lossy);
+    }
+
+    #[cfg(feature = "perceptual")]
+    #[test]
+    fn automatic_palette_is_lossless_after_the_first_reduction() {
+        let directory = tempfile::tempdir().unwrap();
+        let input = directory.path().join("complex.png");
+        fs::write(&input, color_count_fixture(512)).unwrap();
+        let request = Request {
+            inputs: vec![input.to_string_lossy().into()],
+            mode: CompressionMode::AutomaticPalette,
+            ..Request::default()
+        };
+
+        let first = execute(&request);
+        assert!(first.ok, "{first:?}");
+        let first_result = &first.results[0];
+        assert!(first_result.lossy);
+        assert!(
+            first_result
+                .source_colors_at_least
+                .is_some_and(|count| count > 256)
+        );
+
+        let first_output = first_result.output.as_ref().unwrap();
+        let second = execute(&Request {
+            inputs: vec![first_output.clone()],
+            mode: CompressionMode::AutomaticPalette,
+            ..Request::default()
+        });
+        assert!(second.ok, "{second:?}");
+        let second_result = &second.results[0];
+        assert!(!second_result.lossy);
+        assert_eq!(second_result.pixel_identical, Some(true));
+        assert!(
+            second_result
+                .source_colors
+                .is_some_and(|count| count <= 256)
+        );
+        assert!(matches!(
+            second_result.actual_mode.as_deref(),
+            Some("exact_palette" | "lossless")
+        ));
+        let second_output = second_result.output.as_ref().unwrap();
+        assert_eq!(
+            image_data::decode(&fs::read(first_output).unwrap(), 1024 * 1024).unwrap(),
+            image_data::decode(&fs::read(second_output).unwrap(), 1024 * 1024).unwrap()
+        );
+    }
+
+    #[cfg(feature = "perceptual")]
+    #[test]
+    fn automatic_palette_protects_only_after_reaching_the_requested_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let input = directory.path().join("one-hundred-colors.png");
+        fs::write(&input, color_count_fixture(100)).unwrap();
+        let request = Request {
+            inputs: vec![input.to_string_lossy().into()],
+            mode: CompressionMode::AutomaticPalette,
+            max_colors: Some(64),
+            ..Request::default()
+        };
+
+        let first = execute(&request);
+        assert!(first.ok, "{first:?}");
+        let first_result = &first.results[0];
+        assert!(first_result.lossy);
+        assert_eq!(first_result.source_colors, Some(100));
+
+        let second = execute(&Request {
+            inputs: vec![first_result.output.clone().unwrap()],
+            mode: CompressionMode::AutomaticPalette,
+            max_colors: Some(64),
+            ..Request::default()
+        });
+        assert!(second.ok, "{second:?}");
+        assert!(!second.results[0].lossy);
+        assert!(
+            second.results[0]
+                .source_colors
+                .is_some_and(|count| count <= 64)
+        );
     }
 
     #[cfg(feature = "perceptual")]

@@ -25,6 +25,10 @@ struct CompressionDashboard: View {
         PNGSmithSettingsStore.autoStrategyKey,
         store: UserDefaults(suiteName: PNGSmithSettingsStore.appGroup) ?? .standard
     ) var autoColorStrategyRawValue = AutoColorStrategy.balanced.rawValue
+    @AppStorage(
+        PNGSmithSettingsStore.protectExistingPaletteKey,
+        store: UserDefaults(suiteName: PNGSmithSettingsStore.appGroup) ?? .standard
+    ) var protectExistingPalette = true
     @State var colorInput = "256"
     @State var showColorEditor = false
     @State var batchColorInput = "256"
@@ -163,6 +167,11 @@ struct CompressionDashboard: View {
             let before = PreviewVariant(mode: mode, maxColors: Int(maxColors), settings: oldValue)
             let after = PreviewVariant(mode: mode, maxColors: Int(maxColors), settings: newValue)
             if before != after { refreshPreviews() }
+        }
+        .onChange(of: protectExistingPalette) { _, _ in
+            saveSummary = nil
+            automaticColorBudgets.removeAll()
+            refreshPreviews()
         }
     }
 

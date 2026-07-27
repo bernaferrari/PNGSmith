@@ -54,10 +54,20 @@ impl AutoColorStrategy {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AutomaticOptions {
     pub strategy: AutoColorStrategy,
+    pub protect_existing_palette: bool,
+}
+
+impl Default for AutomaticOptions {
+    fn default() -> Self {
+        Self {
+            strategy: AutoColorStrategy::default(),
+            protect_existing_palette: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -12,6 +12,7 @@ final class PNGSmithSettingsStore: ObservableObject {
     nonisolated static let maxColorsKey = "dashboard-max-colors-v1"
     nonisolated static let autoColorsKey = "dashboard-auto-colors-v1"
     nonisolated static let autoStrategyKey = "dashboard-auto-strategy-v1"
+    nonisolated static let protectExistingPaletteKey = "dashboard-protect-existing-palette-v1"
     nonisolated static let saveAsSelectedKey = "dashboard-save-as-selected-v1"
 
     @Published var settings: PNGSmithSettings { didSet { save() } }
@@ -42,6 +43,7 @@ final class PNGSmithSettingsStore: ObservableObject {
         defaults.removeObject(forKey: Self.maxColorsKey)
         defaults.removeObject(forKey: Self.autoColorsKey)
         defaults.removeObject(forKey: Self.autoStrategyKey)
+        defaults.removeObject(forKey: Self.protectExistingPaletteKey)
         defaults.removeObject(forKey: Self.saveAsSelectedKey)
     }
 }

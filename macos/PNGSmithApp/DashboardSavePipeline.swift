@@ -20,7 +20,10 @@ enum DashboardSavePipeline {
                 request.mode = "automatic_palette"
                 request.maxColors = 256
                 request.fallback = "lossless"
-                request.automatic = AutomaticOptions(strategy: automaticStrategy)
+                request.automatic = AutomaticOptions(
+                    strategy: automaticStrategy,
+                    protectExistingPalette: variant.protectExistingPalette
+                )
             } else {
                 let outcome = try await PreviewEngine.shared.preview(source: item.url, variant: variant)
                 if outcome.actualMode == "exact_palette" {
@@ -63,6 +66,8 @@ enum DashboardSavePipeline {
             actualMode: nil,
             paletteEntries: nil,
             colorBudget: nil,
+            sourceColors: nil,
+            sourceColorsAtLeast: nil,
             pixelIdentical: nil,
             lossy: false,
             written: false,

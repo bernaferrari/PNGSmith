@@ -10,7 +10,8 @@ extension CompressionDashboard {
             return PreviewVariant(
                 mode: defaultOptimizationSettings.mode,
                 maxColors: defaultOptimizationSettings.maxColors,
-                settings: store.settings
+                settings: store.settings,
+                protectExistingPalette: protectExistingPalette
             )
         }
         return previewVariant(
@@ -33,6 +34,7 @@ extension CompressionDashboard {
             automaticStrategy: supportedMode == .shrink && optimization.autoColors
                 ? optimization.autoStrategy.rawValue
                 : nil,
+            protectExistingPalette: protectExistingPalette,
             crop: cropOptions(for: item)
         )
     }
@@ -111,6 +113,7 @@ extension CompressionDashboard {
         let defaults = defaultOptimizationSettings
         let optimizations = imageOptimizations
         let crops = cropSelections
+        let paletteProtection = protectExistingPalette
         for url in ordered {
             previews[url] = .loading(previous: previews[url]?.lastKnownOutcome)
         }
@@ -132,14 +135,15 @@ extension CompressionDashboard {
                         maxColors: optimization.maxColors,
                         settings: settings,
                         automaticStrategy: usesAutomaticPalette ? optimization.autoStrategy.rawValue : nil,
+                        protectExistingPalette: paletteProtection,
                         crop: crop
                     )
                     let outcome = try await PreviewEngine.shared.preview(source: url, variant: variant)
                     guard generation == currentGeneration else { return }
                     guard items.contains(where: { $0.url == url }) else { continue }
                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                        if usesAutomaticPalette, let colorBudget = outcome.colorBudget {
-                            automaticColorBudgets[url] = colorBudget
+                        if usesAutomaticPalette {
+                            automaticColorBudgets[url] = outcome.colorBudget
                         }
                         previews[url] = .ready(outcome)
                     }
@@ -567,6 +571,8 @@ extension CompressionDashboard {
                     actualMode: outcome.actualMode,
                     paletteEntries: outcome.paletteEntries,
                     colorBudget: outcome.colorBudget,
+                    sourceColors: outcome.sourceColors,
+                    sourceColorsAtLeast: outcome.sourceColorsAtLeast,
                     pixelIdentical: !outcome.lossy,
                     lossy: outcome.lossy,
                     written: true,
@@ -598,6 +604,7 @@ extension CompressionDashboard {
         let defaults = defaultOptimizationSettings
         let optimizations = imageOptimizations
         let crops = cropSelections
+        let paletteProtection = protectExistingPalette
         Task.detached(priority: .medium) {
             var results: [PNGSmithResult] = []
             for item in snapshot {
@@ -614,6 +621,7 @@ extension CompressionDashboard {
                         maxColors: optimization.maxColors,
                         settings: settings,
                         automaticStrategy: usesAutomaticPalette ? optimization.autoStrategy.rawValue : nil,
+                        protectExistingPalette: paletteProtection,
                         crop: crop
                     )
                     let request = try await DashboardSavePipeline.request(

@@ -16,6 +16,7 @@ struct PreviewVariant: Hashable, Sendable {
     var qualityMin: Int
     var qualityMax: Int
     var automaticStrategy: String?
+    var protectExistingPalette: Bool
     var verifyPixels: Bool
     var crop: CanvasOptions?
 
@@ -24,6 +25,7 @@ struct PreviewVariant: Hashable, Sendable {
         maxColors: Int,
         settings: PNGSmithSettings,
         automaticStrategy: String? = nil,
+        protectExistingPalette: Bool = true,
         crop: CanvasOptions? = nil
     ) {
         self.mode = mode
@@ -36,6 +38,7 @@ struct PreviewVariant: Hashable, Sendable {
         qualityMin = mode == .shrink ? 0 : settings.qualityMin
         qualityMax = mode == .shrink ? 100 : settings.qualityMax
         self.automaticStrategy = automaticStrategy
+        self.protectExistingPalette = protectExistingPalette
         verifyPixels = settings.verifyPixels
         self.crop = crop
     }
@@ -50,7 +53,7 @@ struct PreviewVariant: Hashable, Sendable {
     }
 
     fileprivate var cacheToken: String {
-        "\(mode.rawValue)|\(maxColors)|\(oxipngLevel)|\(zopfli)|\(metadata)|\(qualityMin)|\(qualityMax)|\(automaticStrategy ?? "manual")|\(verifyPixels)|\(cropToken)"
+        "\(mode.rawValue)|\(maxColors)|\(oxipngLevel)|\(zopfli)|\(metadata)|\(qualityMin)|\(qualityMax)|\(automaticStrategy ?? "manual")|\(protectExistingPalette)|\(verifyPixels)|\(cropToken)"
     }
 
     private var cropToken: String {
@@ -67,6 +70,8 @@ struct PreviewOutcome: Equatable, Sendable {
     let actualMode: String
     let paletteEntries: Int?
     let colorBudget: Int?
+    let sourceColors: Int?
+    let sourceColorsAtLeast: Int?
     let lossy: Bool
     let neededColors: Int?
 
@@ -215,7 +220,10 @@ actor PreviewEngine {
                 maxDecompressedBytes: 512 * 1024 * 1024
             ),
             perceptual: PerceptualOptions(qualityMin: variant.qualityMin, qualityMax: variant.qualityMax),
-            automatic: AutomaticOptions(strategy: variant.automaticStrategy ?? "balanced"),
+            automatic: AutomaticOptions(
+                strategy: variant.automaticStrategy ?? "balanced",
+                protectExistingPalette: variant.protectExistingPalette
+            ),
             verify: VerifyOptions(decodedPixels: variant.verifyPixels)
         )
         let response = try await PNGSmithCore.executeAsync(request)
@@ -258,7 +266,7 @@ actor PreviewEngine {
                 maxDecompressedBytes: 512 * 1024 * 1024
             ),
             perceptual: PerceptualOptions(qualityMin: 0, qualityMax: 100),
-            automatic: AutomaticOptions(strategy: "balanced"),
+            automatic: AutomaticOptions(strategy: "balanced", protectExistingPalette: true),
             verify: VerifyOptions(decodedPixels: false)
         )
         let response = try await PNGSmithCore.executeAsync(request)
@@ -283,6 +291,8 @@ actor PreviewEngine {
             actualMode: result.actualMode ?? "lossless",
             paletteEntries: result.paletteEntries,
             colorBudget: result.colorBudget,
+            sourceColors: result.sourceColors,
+            sourceColorsAtLeast: result.sourceColorsAtLeast,
             lossy: result.lossy,
             neededColors: neededColors[source]
         )
