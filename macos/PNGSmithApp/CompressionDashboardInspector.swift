@@ -185,6 +185,14 @@ extension CompressionDashboard {
 
     var sidebarFooter: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if workspaceMode == .batch,
+               batchOptimizationSummary.colorReductionEnabled,
+               batchOptimizationSummary.preset != .manual {
+                batchPaletteProtectionControl
+
+                Divider()
+            }
+
             savingsBar
 
             Divider()

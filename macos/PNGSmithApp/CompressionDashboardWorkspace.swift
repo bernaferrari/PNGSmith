@@ -160,10 +160,6 @@ extension CompressionDashboard {
                     if summary.colorReductionEnabled {
                         batchColorCountControl
                             .transition(.opacity.combined(with: .move(edge: .top)))
-                        if summary.preset != .manual {
-                            batchPaletteProtectionControl
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                        }
                     }
                 }
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: summary.colorReductionEnabled)
