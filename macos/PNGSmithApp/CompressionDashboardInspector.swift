@@ -292,7 +292,7 @@ extension CompressionDashboard {
         .background(WorkspaceSurface.inspector)
         .overlay(alignment: .top) { Divider() }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: saveSummary)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: copiedToClipboardURL)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: copiedToClipboardURL)
     }
 
     var saveDestination: SaveDestination {
