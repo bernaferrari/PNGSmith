@@ -197,21 +197,24 @@ extension CompressionDashboard {
 
             Divider()
 
-            Menu {
-                Picker(
-                    "Save destination",
-                    selection: Binding(
-                        get: { saveDestination },
-                        set: { selectDestination($0) }
-                    )
-                ) {
-                    if activeSaveItems.count == 1, activeSaveItems.first?.isClipboardItem == true {
-                        Label("Copy to Clipboard", systemImage: "doc.on.clipboard")
-                            .tag(SaveDestination.clipboard)
-                        Divider()
-                        Label("Save As…", systemImage: "square.and.arrow.down")
-                            .tag(SaveDestination.saveAs)
-                    } else {
+            if activeSaveItems.count == 1, activeSaveItems.first?.isClipboardItem == true {
+                Text(destinationTitle)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                    .padding(.leading, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: 34)
+                    .accessibilityLabel("Save destination")
+                    .accessibilityValue(destinationTitle)
+            } else {
+                Menu {
+                    Picker(
+                        "Save destination",
+                        selection: Binding(
+                            get: { saveDestination },
+                            set: { selectDestination($0) }
+                        )
+                    ) {
                         Text("Save copies").tag(SaveDestination.copies)
                         Text("Replace originals").tag(SaveDestination.replace)
                         if activeSaveItems.count == 1 {
@@ -220,23 +223,23 @@ extension CompressionDashboard {
                                 .tag(SaveDestination.saveAs)
                         }
                     }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    Text(destinationTitle)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                        .padding(.leading, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: 34)
+                    .contentShape(Rectangle())
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
-            } label: {
-                Text(destinationTitle)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .padding(.leading, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .menuStyle(.borderlessButton)
                 .frame(height: 34)
-                .contentShape(Rectangle())
+                .disabled(isSaving)
+                .accessibilityLabel("Save destination")
+                .accessibilityValue(destinationTitle)
             }
-            .menuStyle(.borderlessButton)
-            .frame(height: 34)
-            .disabled(isSaving)
-            .accessibilityLabel("Save destination")
-            .accessibilityValue(destinationTitle)
 
             HStack(spacing: 8) {
                 Button {
@@ -249,8 +252,6 @@ extension CompressionDashboard {
                             Image(systemName: "exclamationmark.triangle.fill")
                         } else if saveConfirmationTitle != nil {
                             Image(systemName: "checkmark.circle.fill")
-                        } else if saveDestination == .clipboard {
-                            Image(systemName: "doc.on.clipboard.fill")
                         } else {
                             Image(systemName: "arrow.down.circle.fill")
                         }
@@ -266,7 +267,7 @@ extension CompressionDashboard {
                 .disabled(isSaving || !activePreviewStatus.canSave)
                 .help("\(saveButtonTitle) (Command-S)")
 
-                if workspaceMode == .image, selectedItem?.isClipboardItem == false {
+                if workspaceMode == .image, selectedItem != nil {
                     Button {
                         copyPreviewToClipboard()
                     } label: {
@@ -297,7 +298,7 @@ extension CompressionDashboard {
 
     var saveDestination: SaveDestination {
         if activeSaveItems.count == 1, activeSaveItems.first?.isClipboardItem == true {
-            return saveAsSelected ? .saveAs : .clipboard
+            return .saveAs
         }
         if saveAsSelected && activeSaveItems.count == 1 { return .saveAs }
         return store.settings.createCopy ? .copies : .replace
@@ -308,7 +309,6 @@ extension CompressionDashboard {
         case .copies: "Save copies"
         case .replace: "Replace originals"
         case .saveAs: "Save As…"
-        case .clipboard: "Copy to Clipboard"
         }
     }
 
@@ -317,7 +317,7 @@ extension CompressionDashboard {
         switch destination {
         case .copies: store.settings.createCopy = true
         case .replace: store.settings.createCopy = false
-        case .saveAs, .clipboard: break
+        case .saveAs: break
         }
     }
 
@@ -336,8 +336,6 @@ extension CompressionDashboard {
             return count == 1 ? "Replace Original" : "Replace \(count) Originals"
         case .saveAs:
             return "Save As…"
-        case .clipboard:
-            return "Copy to Clipboard"
         }
     }
 
@@ -353,8 +351,6 @@ extension CompressionDashboard {
                 return total == 1 ? "Saved" : "Saved \(total) Copies"
             case .saveAs:
                 return "Saved"
-            case .clipboard:
-                return "Copied"
             }
         }
         if summary.writtenCount > 0 {

@@ -614,10 +614,6 @@ extension CompressionDashboard {
 
     func save() {
         guard !isSaving, activePreviewStatus.canSave else { return }
-        if saveDestination == .clipboard {
-            copyPreviewToClipboard()
-            return
-        }
         if saveDestination == .saveAs {
             saveAs()
             return
@@ -684,10 +680,6 @@ extension CompressionDashboard {
               let outcome = previews[item.url]?.readyOutcome
         else { return }
 
-        let isPrimaryClipboardAction = saveDestination == .clipboard
-        if isPrimaryClipboardAction {
-            saveConfirmationTask?.cancel()
-        }
         clipboardConfirmationTask?.cancel()
         isSaving = true
         saveSummary = nil
@@ -700,28 +692,8 @@ extension CompressionDashboard {
             guard pasteboard.setData(data, forType: .png) else {
                 throw CocoaError(.fileWriteUnknown)
             }
-            let result = PNGSmithResult(
-                input: item.url.path,
-                output: "clipboard",
-                originalBytes: outcome.originalBytes,
-                outputBytes: outcome.outputBytes,
-                actualMode: outcome.actualMode,
-                paletteEntries: outcome.paletteEntries,
-                colorBudget: outcome.colorBudget,
-                sourceColors: outcome.sourceColors,
-                sourceColorsAtLeast: outcome.sourceColorsAtLeast,
-                pixelIdentical: !outcome.lossy,
-                lossy: outcome.lossy,
-                written: true,
-                skippedReason: nil,
-                error: nil
-            )
             isSaving = false
             copiedToClipboardURL = item.url
-            if isPrimaryClipboardAction {
-                saveSummary = SaveSummary(results: [result])
-                scheduleSaveConfirmationReset()
-            }
             scheduleClipboardConfirmationReset(for: item.url)
         } catch {
             isSaving = false

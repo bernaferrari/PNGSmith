@@ -157,7 +157,6 @@ enum SaveDestination: Equatable {
     case copies
     case replace
     case saveAs
-    case clipboard
 }
 
 enum ComparisonLayout: String, CaseIterable, Identifiable, Sendable {
