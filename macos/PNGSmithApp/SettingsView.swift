@@ -22,7 +22,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Settings")
                                 .font(.title2.weight(.semibold))
-                            Text("Tune how PNGSmith compresses and saves your images.")
+                            Text("Tune how PNG Smith compresses and saves your images.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }

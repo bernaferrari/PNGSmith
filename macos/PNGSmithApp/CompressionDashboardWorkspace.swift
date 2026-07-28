@@ -35,13 +35,13 @@ extension CompressionDashboard {
                 if items.count > 1 {
                     documentTabBar
                         .frame(height: WorkspaceMetrics.documentTabBarHeight)
+                        .opacity(cropToolState.showsChrome ? 0.62 : 1)
                         .overlay(alignment: .bottom) {
                             Rectangle()
                                 .fill(Color(nsColor: .separatorColor))
                                 .frame(height: 1)
                                 .allowsHitTesting(false)
                         }
-                        .opacity(cropToolState.showsChrome ? 0.62 : 1)
                         .allowsHitTesting(!cropToolState.isActive)
                         .animation(toolChromeAnimation, value: cropToolState.showsChrome)
                 }
@@ -104,7 +104,7 @@ extension CompressionDashboard {
                         .transition(workspaceModeTransition)
                 }
             }
-            .frame(width: 330)
+            .frame(width: WorkspaceMetrics.inspectorWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -178,7 +178,7 @@ extension CompressionDashboard {
             sidebarFooter
         }
         .background(WorkspaceSurface.inspector)
-        .frame(width: 330)
+        .frame(width: WorkspaceMetrics.inspectorWidth)
     }
 
     var batchStatusText: String {
@@ -363,7 +363,7 @@ extension CompressionDashboard {
                             url: outcome?.outputURL,
                             sourceSize: sourceSize,
                             title: "After",
-                            isLoading: phase?.isInitialLoading == true,
+                            isLoading: phase?.isLoading == true,
                             failed: phase?.failureMessage != nil
                         )
                     }
@@ -383,7 +383,9 @@ extension CompressionDashboard {
                         Text(batchCardDetail(item: item, phase: phase))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(
-                                outcome?.savedBytes ?? 0 > 0 ? Color.green : Color.secondary
+                                phase?.isLoading == true
+                                    ? Color.secondary
+                                    : outcome?.savedBytes ?? 0 > 0 ? Color.green : Color.secondary
                             )
                     }
                     Spacer()
@@ -434,7 +436,7 @@ extension CompressionDashboard {
                 if let url {
                     WorkspaceFileImage(url: url, frame: frame)
                 } else if isLoading {
-                    ProgressView().controlSize(.small)
+                    LoadingSpinner(controlSize: .small)
                 } else if failed {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
@@ -447,6 +449,9 @@ extension CompressionDashboard {
                                     .foregroundStyle(Color.green)
                             }
                             Text(title)
+                            if isLoading, url != nil {
+                                LoadingSpinner(controlSize: .mini)
+                            }
                         }
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 7)
@@ -467,10 +472,10 @@ extension CompressionDashboard {
             return batchCardDetail(item: item, outcome: outcome)
         case .failed:
             return "Preview unavailable"
-        case .loading(let previous):
-            return previous.map { batchCardDetail(item: item, outcome: $0) } ?? "Optimizing…"
+        case .loading:
+            return phase?.loadingDescription ?? "Optimizing preview…"
         case nil:
-            return "Optimizing…"
+            return "Optimizing preview…"
         }
     }
 
@@ -550,7 +555,7 @@ extension CompressionDashboard {
             }
         }
         .background(WorkspaceSurface.inspector)
-        .frame(width: 330)
+        .frame(width: WorkspaceMetrics.inspectorWidth)
     }
 
     var dropPanel: some View {
@@ -854,6 +859,16 @@ extension CompressionDashboard {
             case .loading, nil: .pending
             }
         })
+    }
+
+    var canCopyPreviewToClipboard: Bool {
+        guard workspaceMode == .image,
+              !cropToolState.isActive,
+              !isSaving,
+              activeSaveItems.count == 1,
+              let item = activeSaveItems.first
+        else { return false }
+        return previews[item.url]?.readyOutcome != nil
     }
 
     var activeEstimateAvailable: Bool {

@@ -24,6 +24,7 @@ packages:
 targets:
   PNGSmith:
     type: application
+    productName: PNG Smith
     platform: macOS
     sources:
       - path: PNGSmithApp/AppIcon.icon
@@ -35,7 +36,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.bernardoferrari.pngsmith
-        PRODUCT_NAME: PNGSmith
+        PRODUCT_NAME: "PNG Smith"
+        PRODUCT_MODULE_NAME: PNGSmith
         INFOPLIST_FILE: PNGSmithApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: PNGSmithApp/PNGSmith.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

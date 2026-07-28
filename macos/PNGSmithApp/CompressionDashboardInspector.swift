@@ -247,7 +247,7 @@ extension CompressionDashboard {
                 } label: {
                     HStack(spacing: 8) {
                         if isSaving || (activePreviewStatus.isPending && !activeEstimateAvailable && saveSummary == nil) {
-                            ProgressView().controlSize(.small)
+                            LoadingSpinner(controlSize: .small, contrast: .light)
                         } else if activePreviewStatus.failedCount > 0 || (saveSummary?.failedCount ?? 0) > 0 {
                             Image(systemName: "exclamationmark.triangle.fill")
                         } else if saveConfirmationTitle != nil {
@@ -279,10 +279,10 @@ extension CompressionDashboard {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
-                    .disabled(isSaving || !activePreviewStatus.canSave)
+                    .disabled(!canCopyPreviewToClipboard)
                     .help(copiedToClipboardURL == selectedItem?.url
                           ? "Copied"
-                          : "Copy optimized image to the clipboard")
+                          : "Copy optimized image to the clipboard (Command-C)")
                     .accessibilityLabel(copiedToClipboardURL == selectedItem?.url
                                         ? "Copied to clipboard"
                                         : "Copy optimized image to clipboard")
@@ -383,7 +383,7 @@ extension CompressionDashboard {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                if showInitialProgress { ProgressView().controlSize(.small) }
+                if showInitialProgress { LoadingSpinner(controlSize: .small) }
             }
 
             HStack(spacing: 8) {

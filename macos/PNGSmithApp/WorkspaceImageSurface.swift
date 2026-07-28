@@ -3,11 +3,55 @@ import SwiftUI
 
 enum WorkspaceMetrics {
     static let documentTabBarHeight: CGFloat = 42
+    static let documentTabFilenameMaxWidth: CGFloat = 104
+    static let documentTabStatusWidth: CGFloat = 38
+    static let inspectorWidth: CGFloat = 330
 }
 
 enum WorkspaceSurface {
     static let chrome = Color(nsColor: .windowBackgroundColor)
     static let inspector = Color(nsColor: .windowBackgroundColor)
+}
+
+enum LoadingSpinnerContrast {
+    case adaptive
+    case light
+}
+
+struct LoadingSpinner: NSViewRepresentable {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var controlSize: ControlSize = .regular
+    var contrast: LoadingSpinnerContrast = .adaptive
+
+    func makeNSView(context: Context) -> NSProgressIndicator {
+        let indicator = NSProgressIndicator()
+        indicator.style = .spinning
+        indicator.isIndeterminate = true
+        indicator.isDisplayedWhenStopped = true
+        indicator.controlSize = appKitControlSize
+        indicator.appearance = resolvedAppearance
+        indicator.startAnimation(nil)
+        return indicator
+    }
+
+    func updateNSView(_ indicator: NSProgressIndicator, context: Context) {
+        indicator.controlSize = appKitControlSize
+        indicator.appearance = resolvedAppearance
+        indicator.startAnimation(nil)
+    }
+
+    private var resolvedAppearance: NSAppearance? {
+        let useDarkAppearance = contrast == .light || colorScheme == .dark
+        return NSAppearance(named: useDarkAppearance ? .darkAqua : .aqua)
+    }
+
+    private var appKitControlSize: NSControl.ControlSize {
+        if controlSize == .mini { return .mini }
+        if controlSize == .small { return .small }
+        if controlSize == .large { return .large }
+        return .regular
+    }
 }
 
 struct WorkspaceImageStage: View {
@@ -57,7 +101,7 @@ struct WorkspaceFileImage: View {
                     .interpolation(.high)
                     .scaledToFit()
             } else {
-                ProgressView()
+                LoadingSpinner()
             }
         }
         .frame(width: frame.width, height: frame.height)

@@ -51,7 +51,7 @@ struct CompressionDashboard: View {
         store: UserDefaults(suiteName: PNGSmithSettingsStore.appGroup) ?? .standard
     ) var saveAsSelected = false
     @State var errorMessage: String?
-    @State var showReplaceLossyConfirm = false
+    @State var showReplaceConfirmation = false
     @State var dividerPosition: CGFloat = 0.5
     @State var showingOriginal = false
     @State var didRestoreOpenSession = false
@@ -82,7 +82,7 @@ struct CompressionDashboard: View {
                     .padding(.bottom, 12)
             }
         }
-        .navigationTitle("PNGSmith")
+        .navigationTitle("PNG Smith")
         .toolbar { toolbarContent }
         .toolbarBackground(WorkspaceSurface.chrome, for: .windowToolbar)
         .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
@@ -97,6 +97,13 @@ struct CompressionDashboard: View {
                 selectNext: { selectImage(offset: 1) },
                 closeSelected: { removeSelectedImage() }
             )
+        )
+        .background(
+            PNGSmithClipboardCommandHost(
+                canCopy: canCopyPreviewToClipboard,
+                copy: { copyPreviewToClipboard() }
+            )
+            .frame(width: 0, height: 0)
         )
         .task {
             guard !didRestoreOpenSession else { return }
@@ -162,7 +169,7 @@ struct CompressionDashboard: View {
         }
         .confirmationDialog(
             replaceConfirmationTitle,
-            isPresented: $showReplaceLossyConfirm
+            isPresented: $showReplaceConfirmation
         ) {
             Button("Replace Originals", role: .destructive) { performSave() }
             Button("Cancel", role: .cancel) {}
@@ -278,10 +285,13 @@ extension CompressionDashboard {
                         .foregroundStyle(selected ? .primary : .secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .frame(
+                            maxWidth: WorkspaceMetrics.documentTabFilenameMaxWidth,
+                            alignment: .leading
+                        )
 
                     tabStatus(phase)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -312,7 +322,8 @@ extension CompressionDashboard {
             .help("Close \(item.url.lastPathComponent)")
             .accessibilityLabel("Close \(item.url.lastPathComponent)")
         }
-        .frame(width: 190, height: 36)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(height: 36)
         .padding(.horizontal, 6)
         .background(
             selected
@@ -406,26 +417,24 @@ extension CompressionDashboard {
 
     @ViewBuilder
     func tabStatus(_ phase: PreviewPhase?) -> some View {
-        switch phase {
-        case .ready(let outcome):
-            Text(percentText(outcome))
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(outcome.savedBytes > 0 ? Color.green : Color.secondary)
-        case .failed:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.orange)
-        case .loading(let previous):
-            if let previous {
-                Text(percentText(previous))
+        Group {
+            switch phase {
+            case .ready(let outcome):
+                Text(percentText(outcome))
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(previous.savedBytes > 0 ? Color.green : Color.secondary)
-            } else {
-                ProgressView().controlSize(.mini)
+                    .monospacedDigit()
+                    .foregroundStyle(outcome.savedBytes > 0 ? Color.green : Color.secondary)
+            case .failed:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
+            case .loading:
+                LoadingSpinner(controlSize: .mini)
+            case nil:
+                LoadingSpinner(controlSize: .mini)
             }
-        case nil:
-            ProgressView().controlSize(.mini)
         }
+        .frame(width: WorkspaceMetrics.documentTabStatusWidth, alignment: .leading)
     }
 
 
@@ -523,6 +532,11 @@ extension CompressionDashboard {
 
                 if let outputURL = outcome?.outputURL {
                     WorkspaceFileImage(url: outputURL, frame: afterImageFrame)
+                        .opacity(phase?.isLoading == true ? 0.88 : 1)
+                        .animation(
+                            reduceMotion ? nil : .easeOut(duration: 0.16),
+                            value: phase?.isLoading
+                        )
                 }
 
                 if let item {
@@ -561,11 +575,7 @@ extension CompressionDashboard {
                 if let item {
                     VStack {
                         HStack {
-                            overlayChip(
-                                cropSelections[item.url] == nil
-                                    ? "Before · \(Self.byteText(item.originalBytes))"
-                                    : "Before"
-                            )
+                            overlayChip(beforeOverlayText(item: item, outcome: outcome))
                             Spacer()
                         }
                         Spacer()
@@ -616,21 +626,25 @@ extension CompressionDashboard {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                if phase?.isInitialLoading == true {
-                    VStack {
-                        HStack(spacing: 7) {
-                            ProgressView().controlSize(.small)
-                            Text("Optimizing preview…")
-                        }
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(.regularMaterial, in: Capsule())
-                        .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
-                        Spacer()
+                if let loadingDescription = phase?.loadingDescription {
+                    HStack(spacing: 7) {
+                        LoadingSpinner(controlSize: .small)
+                        Text(loadingDescription)
                     }
-                    .padding(.top, 12)
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(.white.opacity(0.24), lineWidth: 0.5)
+                    }
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+                    .position(x: afterImageFrame.midX, y: afterImageFrame.midY)
                     .allowsHitTesting(false)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(loadingDescription)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }
 
                 if let failure = phase?.failureMessage {
@@ -677,6 +691,21 @@ extension CompressionDashboard {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Before and after image preview")
+    }
+
+    func beforeOverlayText(item: WorkItem, outcome: PreviewOutcome?) -> String {
+        var components = ["Before"]
+        if cropSelections[item.url] == nil {
+            components.append(Self.byteText(item.originalBytes))
+        }
+        if let colors = SourceColorText.value(
+            exact: outcome?.sourceColors,
+            atLeast: outcome?.sourceColorsAtLeast,
+            inferredAtLeast: outcome?.neededColors
+        ) {
+            components.append(colors)
+        }
+        return components.joined(separator: " · ")
     }
 
     var holdToCompareButton: some View {

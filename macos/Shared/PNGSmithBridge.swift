@@ -9,9 +9,9 @@ enum PNGSmithBridgeError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .encodingFailed: "Could not encode the PNGSmith request."
-        case .emptyResponse: "PNGSmith returned no response."
-        case .invalidUTF8: "PNGSmith returned an invalid response."
+        case .encodingFailed: "Could not encode the PNG Smith request."
+        case .emptyResponse: "PNG Smith returned no response."
+        case .invalidUTF8: "PNG Smith returned an invalid response."
         case .coreError(let message): message
         }
     }

@@ -17,10 +17,9 @@ xcodebuild archive \
     "${@}"
 
 mkdir -p "$DIST_DIR"
-ditto "$ARCHIVE_PATH/Products/Applications/PNGSmith.app" "$DIST_DIR/PNGSmith.app"
+ditto "$ARCHIVE_PATH/Products/Applications/PNG Smith.app" "$DIST_DIR/PNG Smith.app"
 install -m 755 "$ROOT_DIR/target/universal-apple-darwin/release/pngsmith" "$DIST_DIR/pngsmith"
-mkdir -p "$DIST_DIR/PNGSmith.app/Contents/Resources/bin"
-install -m 755 "$DIST_DIR/pngsmith" "$DIST_DIR/PNGSmith.app/Contents/Resources/bin/pngsmith"
+mkdir -p "$DIST_DIR/PNG Smith.app/Contents/Resources/bin"
+install -m 755 "$DIST_DIR/pngsmith" "$DIST_DIR/PNG Smith.app/Contents/Resources/bin/pngsmith"
 
 echo "Release artifacts are in $DIST_DIR"
-

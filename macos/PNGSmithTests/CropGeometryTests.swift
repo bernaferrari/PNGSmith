@@ -38,14 +38,13 @@ final class CropGeometryTests: XCTestCase {
         XCTAssertEqual(roundTrip.height, normalized.height, accuracy: 0.000_001)
     }
 
-    func testZoomedDragTranslationUsesDocumentCoordinates() {
-        let translation = CropGeometry.documentTranslation(
-            CGSize(width: 80, height: -40),
-            viewScale: 2
-        )
+    func testZoomedHandleHitTargetsKeepTheirScreenSize() {
+        let frame = CGRect(x: 20, y: 20, width: 400, height: 300)
+        let normal = CropGeometry.hitSize(for: .topLeading, frame: frame, viewScale: 1)
+        let zoomed = CropGeometry.hitSize(for: .topLeading, frame: frame, viewScale: 2)
 
-        XCTAssertEqual(translation.width, 40)
-        XCTAssertEqual(translation.height, -20)
+        XCTAssertEqual(zoomed.width * 2, normal.width)
+        XCTAssertEqual(zoomed.height * 2, normal.height)
     }
 
     func testOutsideImageDetection() {

@@ -5,7 +5,8 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TEAM_ID="${1:-${PNGSMITH_DEVELOPMENT_TEAM:-}}"
 DERIVED_DATA_PATH="$ROOT_DIR/macos/build/DevelopmentSigned"
 INSTALL_DIR="${PNGSMITH_INSTALL_DIR:-$HOME/Applications}"
-APP_PATH="$INSTALL_DIR/PNGSmith.app"
+APP_PATH="$INSTALL_DIR/PNG Smith.app"
+LEGACY_APP_PATH="$INSTALL_DIR/PNGSmith.app"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 if [[ -z "$TEAM_ID" ]]; then
@@ -35,15 +36,18 @@ xcodebuild \
     build
 
 mkdir -p "$INSTALL_DIR"
-if [[ -e "$APP_PATH" ]]; then
-    BACKUP_PATH="$INSTALL_DIR/PNGSmith.previous.$(date +%Y%m%d%H%M%S).app"
-    mv "$APP_PATH" "$BACKUP_PATH"
-    echo "Previous copy moved to $BACKUP_PATH"
-fi
+for EXISTING_APP_PATH in "$APP_PATH" "$LEGACY_APP_PATH"; do
+    if [[ -e "$EXISTING_APP_PATH" ]]; then
+        EXISTING_APP_NAME="$(basename "$EXISTING_APP_PATH" .app)"
+        BACKUP_PATH="$INSTALL_DIR/$EXISTING_APP_NAME.previous.$(date +%Y%m%d%H%M%S).app"
+        mv "$EXISTING_APP_PATH" "$BACKUP_PATH"
+        echo "Previous copy moved to $BACKUP_PATH"
+    fi
+done
 
-ditto "$DERIVED_DATA_PATH/Build/Products/Debug/PNGSmith.app" "$APP_PATH"
+ditto "$DERIVED_DATA_PATH/Build/Products/Debug/PNG Smith.app" "$APP_PATH"
 "$LSREGISTER" -f "$APP_PATH"
 open "$APP_PATH"
 
 echo "Installed signed development build at $APP_PATH"
-echo "Enable the PNGSmith actions in System Settings → General → Login Items & Extensions → Finder."
+echo "Enable the PNG Smith actions in System Settings → General → Login Items & Extensions → Finder."

@@ -133,6 +133,30 @@ final class DashboardArchitectureTests: XCTestCase {
         ))
     }
 
+    func testSourceColorTextDistinguishesExactAndLowerBoundCounts() {
+        XCTAssertEqual(
+            SourceColorText.value(exact: 128, atLeast: nil),
+            "128 colors"
+        )
+        XCTAssertEqual(
+            SourceColorText.value(exact: 1, atLeast: nil),
+            "1 color"
+        )
+        XCTAssertEqual(
+            SourceColorText.value(exact: nil, atLeast: 257),
+            "257+ colors"
+        )
+        XCTAssertEqual(
+            SourceColorText.value(exact: nil, atLeast: 10_000),
+            "\(10_000.formatted())+ colors"
+        )
+        XCTAssertEqual(
+            SourceColorText.value(exact: nil, atLeast: nil, inferredAtLeast: 65),
+            "65+ colors"
+        )
+        XCTAssertNil(SourceColorText.value(exact: nil, atLeast: nil))
+    }
+
     func testSaveSummarySeparatesWrittenSkippedAndFailedResults() {
         let summary = SaveSummary(results: [
             result(written: true, original: 100, output: 60, error: nil),
@@ -160,7 +184,7 @@ final class DashboardArchitectureTests: XCTestCase {
         XCTAssertFalse(ready.isPending)
     }
 
-    func testPreviewPhaseOnlyShowsInitialLoadingWithoutCachedResult() {
+    func testPreviewPhaseDistinguishesInitialOptimizationFromUpdating() {
         let outcome = PreviewOutcome(
             outputURL: URL(fileURLWithPath: "/tmp/output.png"),
             comparisonSourceURL: URL(fileURLWithPath: "/tmp/source.png"),
@@ -175,8 +199,16 @@ final class DashboardArchitectureTests: XCTestCase {
             neededColors: nil
         )
 
-        XCTAssertTrue(PreviewPhase.loading(previous: nil).isInitialLoading)
-        XCTAssertFalse(PreviewPhase.loading(previous: outcome).isInitialLoading)
+        XCTAssertEqual(
+            PreviewPhase.loading(previous: nil).loadingDescription,
+            "Optimizing preview…"
+        )
+        XCTAssertEqual(
+            PreviewPhase.loading(previous: outcome).loadingDescription,
+            "Updating preview…"
+        )
+        XCTAssertNil(PreviewPhase.ready(outcome).loadingDescription)
+        XCTAssertTrue(PreviewPhase.loading(previous: outcome).isLoading)
         XCTAssertEqual(PreviewPhase.loading(previous: outcome).lastKnownOutcome, outcome)
     }
 
@@ -196,6 +228,21 @@ final class DashboardArchitectureTests: XCTestCase {
         XCTAssertEqual(
             ReplacementRisk(hasCropEdits: true, hasLossyPreviews: true),
             .cropAndColorReduction
+        )
+    }
+
+    func testReplacementConfirmationIsOnlyRequiredForBatchReplacement() {
+        XCTAssertFalse(
+            ReplacementConfirmationPolicy.requiresConfirmation(destination: .replace, itemCount: 1)
+        )
+        XCTAssertTrue(
+            ReplacementConfirmationPolicy.requiresConfirmation(destination: .replace, itemCount: 2)
+        )
+        XCTAssertFalse(
+            ReplacementConfirmationPolicy.requiresConfirmation(destination: .copies, itemCount: 2)
+        )
+        XCTAssertFalse(
+            ReplacementConfirmationPolicy.requiresConfirmation(destination: .saveAs, itemCount: 2)
         )
     }
 

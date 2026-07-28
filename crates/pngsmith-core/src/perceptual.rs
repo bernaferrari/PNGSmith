@@ -1,5 +1,5 @@
 #[cfg(feature = "perceptual")]
-use crate::image_data::{DecodedImage, decode};
+use crate::image_data::DecodedImage;
 use crate::{Error, profile::AutoColorStrategy, profile::PerceptualOptions};
 #[cfg(feature = "perceptual")]
 use std::io::Cursor;
@@ -19,27 +19,23 @@ struct EncodedPalette {
 }
 
 #[cfg(feature = "perceptual")]
-pub fn encode(
-    source: &[u8],
+pub fn encode_decoded(
+    image: &DecodedImage,
     max_colors: u16,
-    max_bytes: usize,
     config: &PerceptualOptions,
 ) -> Result<(Vec<u8>, usize), Error> {
-    let image = decode(source, max_bytes)?;
-    let pixels = rgba8(&image);
-    let encoded = encode_decoded(&image, &pixels, max_colors, config)?;
+    let pixels = rgba8(image);
+    let encoded = encode_palette(image, &pixels, max_colors, config)?;
     Ok((encoded.bytes, encoded.palette_entries))
 }
 
 #[cfg(feature = "perceptual")]
-pub fn encode_automatic(
-    source: &[u8],
+pub fn encode_automatic_decoded(
+    image: &DecodedImage,
     max_colors: u16,
-    max_bytes: usize,
     strategy: AutoColorStrategy,
 ) -> Result<AutomaticResult, Error> {
-    let image = decode(source, max_bytes)?;
-    let pixels = rgba8(&image);
+    let pixels = rgba8(image);
     let unrestricted = PerceptualOptions {
         quality_min: 0,
         quality_max: 100,
@@ -51,7 +47,7 @@ pub fn encode_automatic(
     // indistinguishable from Balanced. Anchor the search to the best quality
     // this particular image can achieve, then preserve a meaningful quality
     // gap between the strategies when the nominal floors are unreachable.
-    let maximum = encode_decoded(&image, &pixels, max_colors, &unrestricted)?;
+    let maximum = encode_palette(image, &pixels, max_colors, &unrestricted)?;
     let quality_floor = effective_quality_floor(strategy, maximum.quality);
     let mut lower_bound = 2;
     let mut upper_bound = max_colors.saturating_sub(1);
@@ -63,7 +59,7 @@ pub fn encode_automatic(
 
     while lower_bound <= upper_bound {
         let candidate = lower_bound + (upper_bound - lower_bound) / 2;
-        let encoded = encode_decoded(&image, &pixels, candidate, &unrestricted)?;
+        let encoded = encode_palette(image, &pixels, candidate, &unrestricted)?;
         if encoded.quality >= quality_floor {
             best = AutomaticResult {
                 bytes: encoded.bytes,
@@ -108,7 +104,7 @@ fn rgba8(image: &DecodedImage) -> Vec<imagequant::RGBA> {
 }
 
 #[cfg(feature = "perceptual")]
-fn encode_decoded(
+fn encode_palette(
     image: &DecodedImage,
     pixels: &[imagequant::RGBA],
     max_colors: u16,
@@ -152,10 +148,9 @@ fn encode_decoded(
 }
 
 #[cfg(not(feature = "perceptual"))]
-pub fn encode(
-    _source: &[u8],
+pub fn encode_decoded(
+    _image: &crate::image_data::DecodedImage,
     _max_colors: u16,
-    _max_bytes: usize,
     _config: &PerceptualOptions,
 ) -> Result<(Vec<u8>, usize), Error> {
     Err(Error::Perceptual(
@@ -164,10 +159,9 @@ pub fn encode(
 }
 
 #[cfg(not(feature = "perceptual"))]
-pub fn encode_automatic(
-    _source: &[u8],
+pub fn encode_automatic_decoded(
+    _image: &crate::image_data::DecodedImage,
     _max_colors: u16,
-    _max_bytes: usize,
     _strategy: AutoColorStrategy,
 ) -> Result<AutomaticResult, Error> {
     Err(Error::Perceptual(

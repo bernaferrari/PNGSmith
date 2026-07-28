@@ -37,7 +37,7 @@ enum PNGAutomaticStrategy: String, AppEnum {
 
 struct CompressPNGIntent: AppIntent {
     static let title: LocalizedStringResource = "Compress PNG"
-    static let description = IntentDescription("Compress PNG files with the embedded PNGSmith engine.")
+    static let description = IntentDescription("Compress PNG files with the embedded PNG Smith engine.")
     static let openAppWhenRun = false
 
     @Parameter(title: "PNG Files", supportedTypeIdentifiers: ["public.png"]) var files: [IntentFile]

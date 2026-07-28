@@ -8,6 +8,7 @@ mod output_policy;
 mod perceptual;
 mod png_document;
 pub mod profile;
+mod source_color_count;
 mod verify;
 
 pub use profile::{
@@ -340,19 +341,17 @@ fn make_candidate(
             if document.is_animated() {
                 return animated_palette_fallback(source, request);
             }
-            let (bytes, count) = perceptual::encode(
-                source,
-                max,
-                request.lossless.max_decompressed_bytes,
-                &request.perceptual,
-            )?;
+            let image = image_data::decode(source, request.lossless.max_decompressed_bytes)?;
+            let (source_colors, source_colors_at_least) =
+                source_color_count::count(&image).response_values();
+            let (bytes, count) = perceptual::encode_decoded(&image, max, &request.perceptual)?;
             Ok(Candidate {
                 bytes,
                 mode: "perceptual",
                 palette_entries: Some(count),
                 color_budget: None,
-                source_colors: None,
-                source_colors_at_least: None,
+                source_colors,
+                source_colors_at_least,
                 lossy: true,
                 optimized: false,
             })
@@ -361,15 +360,9 @@ fn make_candidate(
             if document.is_animated() {
                 return animated_palette_fallback(source, request);
             }
+            let image = image_data::decode(source, request.lossless.max_decompressed_bytes)?;
             let (source_colors, source_colors_at_least) =
-                match exact_palette::encode(source, 256, request.lossless.max_decompressed_bytes) {
-                    Ok((_, count)) => (Some(count), None),
-                    Err(Error::TooManyColors { found_at_least, .. }) => {
-                        (None, Some(found_at_least))
-                    }
-                    Err(Error::ExactPalette(_)) => (None, None),
-                    Err(error) => return Err(error),
-                };
+                source_color_count::count(&image).response_values();
             if request.automatic.protect_existing_palette
                 && source_colors.is_some_and(|count| count <= usize::from(max))
             {
@@ -380,12 +373,8 @@ fn make_candidate(
                 candidate.source_colors_at_least = None;
                 return Ok(candidate);
             }
-            let automatic = perceptual::encode_automatic(
-                source,
-                max,
-                request.lossless.max_decompressed_bytes,
-                request.automatic.strategy,
-            )?;
+            let automatic =
+                perceptual::encode_automatic_decoded(&image, max, request.automatic.strategy)?;
             Ok(Candidate {
                 bytes: automatic.bytes,
                 mode: "automatic_palette",
@@ -457,7 +446,7 @@ mod tests {
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         encoder
-            .add_text_chunk("Author".into(), "PNGSmith".into())
+            .add_text_chunk("Author".into(), "PNG Smith".into())
             .unwrap();
         let mut writer = encoder.write_header().unwrap();
         writer
@@ -594,6 +583,8 @@ mod tests {
         assert!(response.ok, "{response:?}");
         assert!(response.results[0].lossy);
         assert_eq!(response.results[0].pixel_identical, None);
+        assert_eq!(response.results[0].source_colors, Some(2));
+        assert_eq!(response.results[0].source_colors_at_least, None);
     }
 
     #[test]
@@ -627,7 +618,7 @@ mod tests {
                 .info()
                 .uncompressed_latin1_text
                 .iter()
-                .any(|chunk| { chunk.keyword == "Author" && chunk.text == "PNGSmith" })
+                .any(|chunk| { chunk.keyword == "Author" && chunk.text == "PNG Smith" })
         );
     }
 
@@ -657,12 +648,11 @@ mod tests {
         assert_eq!(AutoColorStrategy::Smaller.minimum_quality(), 74);
 
         let source = gradient_fixture();
+        let image = image_data::decode(&source, 1024 * 1024).unwrap();
         let balanced =
-            perceptual::encode_automatic(&source, 256, 1024 * 1024, AutoColorStrategy::Balanced)
-                .unwrap();
+            perceptual::encode_automatic_decoded(&image, 256, AutoColorStrategy::Balanced).unwrap();
         let smaller =
-            perceptual::encode_automatic(&source, 256, 1024 * 1024, AutoColorStrategy::Smaller)
-                .unwrap();
+            perceptual::encode_automatic_decoded(&image, 256, AutoColorStrategy::Smaller).unwrap();
 
         assert!((2..=256).contains(&balanced.color_budget));
         assert!(balanced.palette_entries <= usize::from(balanced.color_budget));
@@ -702,6 +692,36 @@ mod tests {
 
     #[cfg(feature = "perceptual")]
     #[test]
+    fn automatic_palette_caps_reported_source_colors_at_ten_thousand() {
+        let directory = tempfile::tempdir().unwrap();
+        let input = directory.path().join("many-colors.png");
+        fs::write(
+            &input,
+            color_count_fixture(source_color_count::LIMIT as u16 + 1),
+        )
+        .unwrap();
+        let request = Request {
+            inputs: vec![input.to_string_lossy().into()],
+            mode: CompressionMode::AutomaticPalette,
+            automatic: AutomaticOptions {
+                strategy: AutoColorStrategy::Balanced,
+                protect_existing_palette: false,
+            },
+            ..Request::default()
+        };
+
+        let response = execute(&request);
+        assert!(response.ok, "{response:?}");
+        let result = &response.results[0];
+        assert_eq!(result.source_colors, None);
+        assert_eq!(
+            result.source_colors_at_least,
+            Some(source_color_count::LIMIT)
+        );
+    }
+
+    #[cfg(feature = "perceptual")]
+    #[test]
     fn automatic_palette_is_lossless_after_the_first_reduction() {
         let directory = tempfile::tempdir().unwrap();
         let input = directory.path().join("complex.png");
@@ -716,11 +736,8 @@ mod tests {
         assert!(first.ok, "{first:?}");
         let first_result = &first.results[0];
         assert!(first_result.lossy);
-        assert!(
-            first_result
-                .source_colors_at_least
-                .is_some_and(|count| count > 256)
-        );
+        assert_eq!(first_result.source_colors, Some(512));
+        assert_eq!(first_result.source_colors_at_least, None);
 
         let first_output = first_result.output.as_ref().unwrap();
         let second = execute(&Request {

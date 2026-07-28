@@ -6,10 +6,22 @@ extension CropEditorWorkspace {
     var editorCanvas: some View {
         GeometryReader { proxy in
             ZStack {
-                cropStage(size: proxy.size)
-                    .scaleEffect(viewZoom, anchor: .center)
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
+                // Native scrollbars leave a transparent gutter beside the
+                // document view. Paint the crop workspace underneath it so
+                // the comparison preview below cannot show through at zoom.
+                WorkspaceImageStage()
+                    .opacity(surfaceDimmed ? 1 : 0)
+
+                ScrollView([.horizontal, .vertical]) {
+                    cropStage(size: proxy.size)
+                        .scaleEffect(viewZoom, anchor: .topLeading)
+                        .frame(
+                            width: proxy.size.width * viewZoom,
+                            height: proxy.size.height * viewZoom,
+                            alignment: .topLeading
+                        )
+                }
+                .defaultScrollAnchor(.center)
 
                 zoomControl
                     .opacity(workspacePresented ? 1 : 0)
@@ -95,6 +107,7 @@ extension CropEditorWorkspace {
 
         }
         .frame(width: size.width, height: size.height)
+        .coordinateSpace(name: "crop-document")
         .animation(aspectAnimation, value: aspect)
         .animation(aspectAnimation, value: allowOutsideImage)
         .onContinuousHover(coordinateSpace: .local) { phase in
@@ -254,17 +267,14 @@ extension CropEditorWorkspace {
     }
 
     private func canvasMoveGesture(base: CGRect, workspace: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 1)
+        DragGesture(minimumDistance: 1, coordinateSpace: .named("crop-document"))
             .onChanged { value in
                 if moveStart == nil {
                     moveStart = CropGeometry.canvasRect(canvas, in: base)
                     gestureStartEdit = currentEdit
                 }
                 guard let start = moveStart else { return }
-                let translation = CropGeometry.documentTranslation(
-                    value.translation,
-                    viewScale: viewZoom
-                )
+                let translation = value.translation
                 var proposed = CGRect(
                     x: start.minX + translation.width,
                     y: start.minY + translation.height,
@@ -328,7 +338,7 @@ extension CropEditorWorkspace {
     }
 
     private func resizeGesture(_ handle: CropHandle, base: CGRect, workspace: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("crop-document"))
             .onChanged { value in
                 handle.cursor.set()
                 if resizeStart == nil {
@@ -337,10 +347,7 @@ extension CropEditorWorkspace {
                     gestureStartEdit = currentEdit
                 }
                 guard let start = resizeStart else { return }
-                let translation = CropGeometry.documentTranslation(
-                    value.translation,
-                    viewScale: viewZoom
-                )
+                let translation = value.translation
                 let resized = resizedRect(
                     start,
                     handle: handle,

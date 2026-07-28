@@ -159,6 +159,12 @@ enum SaveDestination: Equatable {
     case saveAs
 }
 
+enum ReplacementConfirmationPolicy {
+    static func requiresConfirmation(destination: SaveDestination, itemCount: Int) -> Bool {
+        destination == .replace && itemCount > 1
+    }
+}
+
 enum ComparisonLayout: String, CaseIterable, Identifiable, Sendable {
     case hold
     case divider
@@ -195,6 +201,22 @@ enum PaletteProtectionPolicy {
             return sourceColors <= 256
         }
         return sourceColorsAtLeast == nil
+    }
+}
+
+enum SourceColorText {
+    static func value(
+        exact: Int?,
+        atLeast: Int?,
+        inferredAtLeast: Int? = nil
+    ) -> String? {
+        if let exact {
+            return "\(exact.formatted()) \(exact == 1 ? "color" : "colors")"
+        }
+        if let lowerBound = atLeast ?? inferredAtLeast {
+            return "\(lowerBound.formatted())+ colors"
+        }
+        return nil
     }
 }
 

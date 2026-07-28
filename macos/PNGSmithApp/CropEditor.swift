@@ -78,7 +78,8 @@ struct CropEditorWorkspace: View {
                 // crop affordance margin belongs inside the canvas instead.
                 .padding(18)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider().opacity(workspacePresented ? 1 : 0)
+            // The persistent workspace beneath this overlay owns the inspector
+            // separator. Drawing another one here doubles its visual weight.
             sidebar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -208,7 +209,7 @@ struct CropEditorWorkspace: View {
         }
         .background(WorkspaceSurface.inspector.opacity(workspacePresented ? 1 : 0))
         .animation(chromeAnimation, value: workspacePresented)
-        .frame(width: 330)
+        .frame(width: WorkspaceMetrics.inspectorWidth)
     }
 
     var aspectControl: some View {

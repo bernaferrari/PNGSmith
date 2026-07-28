@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-    echo "Usage: $0 'Developer ID Application: Name (TEAMID)' /path/to/PNGSmith.app" >&2
+    echo "Usage: $0 'Developer ID Application: Name (TEAMID)' '/path/to/PNG Smith.app'" >&2
     exit 2
 fi
 

@@ -75,14 +75,6 @@ enum CropGeometry {
         )
     }
 
-    static func documentTranslation(_ translation: CGSize, viewScale: CGFloat) -> CGSize {
-        let scale = max(viewScale, 1)
-        return CGSize(
-            width: translation.width / scale,
-            height: translation.height / scale
-        )
-    }
-
     static func nearestSnap(
         candidates: [(offset: CGFloat, guide: CGFloat)],
         threshold: CGFloat

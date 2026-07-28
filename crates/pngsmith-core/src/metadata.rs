@@ -99,7 +99,7 @@ mod tests {
         encoder.set_color(png::ColorType::Rgb);
         encoder.set_depth(png::BitDepth::Eight);
         encoder
-            .add_text_chunk("Author".into(), "PNGSmith".into())
+            .add_text_chunk("Author".into(), "PNG Smith".into())
             .unwrap();
         let mut writer = encoder.write_header().unwrap();
         writer.write_image_data(&[1, 2, 3]).unwrap();

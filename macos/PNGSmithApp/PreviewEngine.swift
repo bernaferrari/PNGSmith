@@ -106,9 +106,12 @@ enum PreviewPhase: Equatable {
         return false
     }
 
-    var isInitialLoading: Bool {
-        if case .loading(previous: nil) = self { return true }
-        return false
+    var loadingDescription: String? {
+        switch self {
+        case .loading(previous: nil): "Optimizing preview…"
+        case .loading: "Updating preview…"
+        case .ready, .failed: nil
+        }
     }
 
     var failureMessage: String? {

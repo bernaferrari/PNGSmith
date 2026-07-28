@@ -254,7 +254,7 @@ extension CompressionDashboard {
         if pngs.isEmpty {
             errorMessage = expansion.containsDirectory
                 ? "No PNG files were found in that folder."
-                : "PNGSmith only accepts PNG files."
+                : "PNG Smith only accepts PNG files."
             return false
         }
         errorMessage = expansion.rejectedCount == 0 ? nil : "Some items did not contain PNG files."
@@ -350,7 +350,7 @@ extension CompressionDashboard {
             rememberOpenSession()
             refreshPreviews(for: [url])
         } catch {
-            errorMessage = "PNGSmith could not read that clipboard image: \(error.localizedDescription)"
+            errorMessage = "PNG Smith could not read that clipboard image: \(error.localizedDescription)"
         }
     }
 
@@ -418,7 +418,7 @@ extension CompressionDashboard {
     func replaceImage(at currentURL: URL, with replacementURL: URL) {
         let replacementURL = replacementURL.standardizedFileURL
         guard replacementURL.pathExtension.caseInsensitiveCompare("png") == .orderedSame else {
-            errorMessage = "PNGSmith only accepts PNG files."
+            errorMessage = "PNG Smith only accepts PNG files."
             return
         }
         guard let index = items.firstIndex(where: { $0.url == currentURL }) else { return }
@@ -618,19 +618,24 @@ extension CompressionDashboard {
             saveAs()
             return
         }
-        if saveDestination == .replace && replacementRisk != .none {
-            showReplaceLossyConfirm = true
+        if ReplacementConfirmationPolicy.requiresConfirmation(
+            destination: saveDestination,
+            itemCount: activeSaveItems.count
+        ) {
+            showReplaceConfirmation = true
             return
         }
         performSave()
     }
 
     var replaceConfirmationTitle: String {
-        switch replacementRisk {
-        case .cropAndColorReduction: "Replace originals with these edits?"
-        case .crop: "Replace originals with cropped images?"
-        case .colorReduction: "Replace originals with fewer colors?"
-        case .none: "Replace originals?"
+        let count = activeSaveItems.count
+        let originals = count == 1 ? "original" : "\(count) originals"
+        return switch replacementRisk {
+        case .cropAndColorReduction: "Replace \(originals) with these edits?"
+        case .crop: "Replace \(originals) with cropped images?"
+        case .colorReduction: "Replace \(originals) with fewer colors?"
+        case .none: "Replace \(originals)?"
         }
     }
 
@@ -674,8 +679,7 @@ extension CompressionDashboard {
     }
 
     func copyPreviewToClipboard() {
-        guard !isSaving,
-              activeSaveItems.count == 1,
+        guard canCopyPreviewToClipboard,
               let item = activeSaveItems.first,
               let outcome = previews[item.url]?.readyOutcome
         else { return }
@@ -697,7 +701,7 @@ extension CompressionDashboard {
             scheduleClipboardConfirmationReset(for: item.url)
         } catch {
             isSaving = false
-            errorMessage = "PNGSmith could not copy that image: \(error.localizedDescription)"
+            errorMessage = "PNG Smith could not copy that image: \(error.localizedDescription)"
         }
     }
 

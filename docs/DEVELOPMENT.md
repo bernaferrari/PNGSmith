@@ -1,4 +1,4 @@
-# PNGSmith developer guide
+# PNG Smith developer guide
 
 This guide covers local builds, the command-line and JSON interfaces, tests, architecture, and releases. For the product overview, see the [README](../README.md).
 
@@ -20,7 +20,7 @@ brew install xcodegen
 ./scripts/development-install.sh YOUR_APPLE_TEAM_ID
 ```
 
-The installer builds the universal Rust framework, generates the Xcode project, signs every target, installs PNGSmith in `~/Applications`, registers it with LaunchServices, and opens it. Existing development builds are moved aside instead of deleted.
+The installer builds the universal Rust framework, generates the Xcode project, signs every target, installs PNG Smith in `~/Applications`, registers it with LaunchServices, and opens it. Existing development builds are moved aside instead of deleted.
 
 ### Unsigned UI build
 
